@@ -18,7 +18,7 @@ const DEFAULT_CONFIG = {
   kknTitle: "RAB & Kas KKN",
   kknSubtitle: "Laporan Pemasukan & Pengeluaran Realtime",
   targetIuran: 1500000,
-  logoPath: "main/logo.png",
+  logoPath: "logo.png",
   ketuaName: "AHMAD DANI SARKAWI",
   bendaharaName: "ULUL AZMI MAWARTI"
 };
@@ -1250,7 +1250,7 @@ document.addEventListener("DOMContentLoaded", () => {
     appConfig.kknTitle = document.getElementById("adminKknTitle").value.trim() || DEFAULT_CONFIG.kknTitle;
     appConfig.kknSubtitle = document.getElementById("adminKknSubtitle").value.trim() || DEFAULT_CONFIG.kknSubtitle;
     appConfig.targetIuran = Number(document.getElementById("adminTargetIuran").value) || 0;
-    appConfig.logoPath = document.getElementById("adminLogoPath").value.trim() || "main/logo.png";
+    appConfig.logoPath = document.getElementById("adminLogoPath").value.trim() || "logo.png";
     appConfig.ketuaName = document.getElementById("adminKetuaName").value.trim() || DEFAULT_CONFIG.ketuaName;
     appConfig.bendaharaName = document.getElementById("adminBendaharaName").value.trim() || DEFAULT_CONFIG.bendaharaName;
     saveConfig();
