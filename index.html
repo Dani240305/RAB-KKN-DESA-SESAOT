@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Monitoring RAB & Kas KKN Realtime</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <!-- Pustaka Pembaca Excel & Generator PDF -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+  <!-- Header Utama -->
+  <header class="app-header">
+    <div class="container header-inner">
+      <div class="brand-group">
+        <div class="logo-wrapper">
+          <img
+            id="brandLogoImg"
+            src="main/logo.png"
+            alt="Logo KKN"
+            class="brand-logo"
+            onerror="this.style.display='none'; document.getElementById('logoFallback').style.display='flex';"
+          />
+          <div id="logoFallback" class="logo-fallback" style="display: none;">KKN</div>
+        </div>
+        <div class="brand-text">
+          <h1 id="headerTitle">RAB & Kas KKN</h1>
+          <p id="headerSubtitle">Laporan Pemasukan & Pengeluaran Realtime</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <div id="syncBadge" class="sync-badge status-cached" title="Status sinkronisasi Excel Online">
+          <span class="sync-dot"></span>
+          <span id="syncStatusText">Data Tersinkron</span>
+        </div>
+        <button id="btnManualSync" class="btn btn-icon" title="Sinkronkan Sekarang" aria-label="Sinkronkan Sekarang">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+            <path d="M3 3v5h5" />
+            <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+            <path d="M16 16h5v5" />
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Navigasi Desktop -->
+    <nav class="desktop-nav container" aria-label="Navigasi Utama">
+      <button class="nav-tab active" data-view="ringkasan">Ringkasan Kas</button>
+      <button class="nav-tab" data-view="pemasukan">Pemasukan Anggota</button>
+      <button class="nav-tab" data-view="pengeluaran">Rincian Pengeluaran</button>
+      <button class="nav-tab" data-view="admin" id="desktopAdminTab">
+        <span class="lock-indicator" id="desktopLockIcon">🔒</span> Panel Admin
+      </button>
+    </nav>
+  </header>
+
+  <!-- Konten Utama -->
+  <main class="container main-content">
+    <!-- Bar Info Waktu & Tombol Aksi Cepat -->
+    <section class="action-toolbar">
+      <div class="last-updated">
+        Pembaruan terakhir: <strong id="lastUpdatedTime">-</strong>
+      </div>
+      <div class="quick-export-buttons">
+        <button id="btnCopyWA" class="btn btn-wa">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          <span>Salin Laporan WA</span>
+        </button>
+        <button id="btnSendWA" class="btn btn-outline-wa" title="Buka langsung di WhatsApp">
+          <span>Kirim WA</span>
+        </button>
+        <button id="btnExportPDF" class="btn btn-pdf">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="12" y1="18" x2="12" y2="12"></line>
+            <polyline points="9 15 12 18 15 15"></polyline>
+          </svg>
+          <span>Ekspor PDF</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Kartu KPI Saldo Utama -->
+    <section class="kpi-grid">
+      <article class="kpi-card kpi-income">
+        <div class="kpi-header">
+          <span class="kpi-label">Total Pemasukan</span>
+          <span class="kpi-icon">↓</span>
+        </div>
+        <div class="kpi-value" id="kpiTotalPemasukan">Rp 0</div>
+        <div class="kpi-sub" id="kpiSubPemasukan">0 dari 0 anggota berkontribusi</div>
+      </article>
+
+      <article class="kpi-card kpi-expense">
+        <div class="kpi-header">
+          <span class="kpi-label">Total Pengeluaran</span>
+          <span class="kpi-icon">↑</span>
+        </div>
+        <div class="kpi-value" id="kpiTotalPengeluaran">Rp 0</div>
+        <div class="kpi-sub" id="kpiSubPengeluaran">0 item belanja tercatat</div>
+      </article>
+
+      <article class="kpi-card kpi-balance">
+        <div class="kpi-header">
+          <span class="kpi-label">Sisa Saldo Kas</span>
+          <span class="kpi-icon">◈</span>
+        </div>
+        <div class="kpi-value" id="kpiSisaSaldo">Rp 0</div>
+        <div class="kpi-sub" id="kpiSubSaldo">Rasio serapan anggaran 0%</div>
+      </article>
+    </section>
+
+    <!-- VIEW 1: RINGKASAN -->
+    <section id="view-ringkasan" class="view-section active">
+      <div class="dashboard-split">
+        <!-- Rekapitulasi per Jenis RAB -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2>Rekapitulasi Jenis RAB</h2>
+              <p class="card-desc">Distribusi pengeluaran berdasarkan pos anggaran</p>
+            </div>
+          </div>
+          <div id="categorySummaryList" class="category-bars"></div>
+        </div>
+
+        <!-- Ringkasan Cepat Iuran Anggota -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2>Status Iuran Anggota</h2>
+              <p class="card-desc">Progres setoran kas tiap anggota</p>
+            </div>
+            <button class="btn-link" onclick="switchView('pemasukan')">Lihat Semua →</button>
+          </div>
+          <div id="summaryMembersPreview" class="compact-member-list"></div>
+        </div>
+      </div>
+
+      <!-- Transaksi Terbaru -->
+      <div class="card mt-section">
+        <div class="card-header">
+          <div>
+            <h2>Rincian Item Anggaran Tercatat</h2>
+            <p class="card-desc">Seluruh item dengan nominal aktif di lembar kerja</p>
+          </div>
+          <button class="btn-link" onclick="switchView('pengeluaran')">Detail Kategori →</button>
+        </div>
+        <div id="recentItemsContainer" class="responsive-items-wrapper"></div>
+      </div>
+    </section>
+
+    <!-- VIEW 2: PEMASUKAN ANGGOTA -->
+    <section id="view-pemasukan" class="view-section">
+      <div class="card">
+        <div class="card-header wrap-header">
+          <div>
+            <h2>Pemasukan Iuran Anggota</h2>
+            <p class="card-desc">Target iuran acuan per anggota: <strong id="displayTargetIuran">Rp 900.000</strong></p>
+          </div>
+          <div class="filter-controls">
+            <input type="search" id="searchMemberInput" class="input-field" placeholder="Cari nama anggota..." />
+            <select id="filterMemberStatus" class="input-field">
+              <option value="all">Semua Status</option>
+              <option value="paid">Sudah Bayar</option>
+              <option value="unpaid">Belum Bayar</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Tampilan Kartu Detail untuk Ponsel & Grid Rapi untuk Desktop -->
+        <div id="membersDetailContainer" class="members-grid"></div>
+      </div>
+    </section>
+
+    <!-- VIEW 3: RINCIAN PENGELUARAN -->
+    <section id="view-pengeluaran" class="view-section">
+      <div class="card">
+        <div class="card-header wrap-header">
+          <div>
+            <h2>Rincian Pengeluaran RAB</h2>
+            <p class="card-desc">Filter berdasarkan pos anggaran atau cari nama barang</p>
+          </div>
+          <div class="filter-controls">
+            <input type="search" id="searchExpenseInput" class="input-field" placeholder="Cari barang / proker..." />
+          </div>
+        </div>
+
+        <!-- Pill Kategori yang Mudah Digeser di Ponsel -->
+        <div class="category-pills" id="expenseCategoryPills">
+          <button class="pill active" data-cat="ALL">Semua Pos</button>
+          <button class="pill" data-cat="POSKO">Posko</button>
+          <button class="pill" data-cat="PDD">PDD</button>
+          <button class="pill" data-cat="KONSUMSI">Konsumsi</button>
+          <button class="pill" data-cat="LAIN-LAIN">Lain-Lain</button>
+          <button class="pill" data-cat="PROKER">Proker</button>
+        </div>
+
+        <!-- Info Subtotal Kategori Terpilih -->
+        <div class="category-banner">
+          <span>Total Kategori <strong id="selectedCatLabel">Semua Pos</strong>:</span>
+          <strong id="selectedCatTotal" class="banner-amount">Rp 0</strong>
+        </div>
+
+        <!-- Kontainer Detail Pengeluaran (Kartu di HP, Tabel di Desktop) -->
+        <div id="expenseDetailContainer"></div>
+      </div>
+    </section>
+
+    <!-- VIEW 4: PANEL ADMIN -->
+    <section id="view-admin" class="view-section">
+      <div class="card admin-panel-card">
+        <div class="card-header wrap-header">
+          <div>
+            <h2>Panel Pengaturan Admin</h2>
+            <p class="card-desc">Kelola tautan Excel Online, interval sinkronisasi, dan identitas laporan</p>
+          </div>
+          <button id="btnLockAdmin" class="btn btn-danger">Kunci Panel Admin</button>
+        </div>
+
+        <div class="admin-grid">
+          <!-- Pengaturan Sumber Excel Online -->
+          <div class="admin-box">
+            <h3>1. Sumber Data Excel Online</h3>
+            <label class="form-label" for="adminExcelUrl">Tautan OneDrive / Excel Online</label>
+            <textarea id="adminExcelUrl" class="input-field textarea-url" rows="3" placeholder="Tempel tautan berbagi Excel Online di sini..."></textarea>
+            <p class="form-hint">Mendukung tautan berbagi OneDrive Excel Online atau tautan langsung file .xlsx.</p>
+
+            <div class="form-row-2">
+              <div>
+                <label class="form-label" for="adminSyncInterval">Interval Sinkronisasi Otomatis</label>
+                <select id="adminSyncInterval" class="input-field">
+                  <option value="0">Manual Saja</option>
+                  <option value="15000">Setiap 15 Detik</option>
+                  <option value="30000">Setiap 30 Detik</option>
+                  <option value="60000">Setiap 1 Menit</option>
+                  <option value="300000">Setiap 5 Menit</option>
+                </select>
+              </div>
+              <div>
+                <label class="form-label" for="adminCorsProxy">Metode Akses Jaringan</label>
+                <select id="adminCorsProxy" class="input-field">
+                  <option value="auto">Otomatis</option>
+                  <option value="direct">Langsung Tanpa Proxy</option>
+                  <option value="corsproxy">Jalur Proxy Cadangan 1</option>
+                  <option value="allorigins">Jalur Proxy Cadangan 2</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="admin-btn-row">
+              <button id="btnSaveAndSync" class="btn btn-primary">Simpan & Tes Sinkronisasi</button>
+              <label class="btn btn-secondary file-upload-btn">
+                <span>Unggah File .xlsx Manual</span>
+                <input type="file" id="adminUploadXlsx" accept=".xlsx,.xls" hidden />
+              </label>
+            </div>
+          </div>
+
+          <!-- Pengaturan Identitas & Laporan PDF/WA -->
+          <div class="admin-box">
+            <h3>2. Identitas KKN & Format Laporan</h3>
+            <label class="form-label" for="adminKknTitle">Judul Utama Aplikasi</label>
+            <input type="text" id="adminKknTitle" class="input-field" placeholder="Contoh: RAB & Kas KKN Desa Sesaot" />
+
+            <label class="form-label" for="adminKknSubtitle">Subjudul / Keterangan Periode</label>
+            <input type="text" id="adminKknSubtitle" class="input-field" placeholder="Contoh: Universitas Mataram • Periode 2026" />
+
+            <div class="form-row-2">
+              <div>
+                <label class="form-label" for="adminTargetIuran">Target Iuran per Anggota</label>
+                <input type="number" id="adminTargetIuran" class="input-field" step="50000" min="0" />
+              </div>
+              <div>
+                <label class="form-label" for="adminLogoPath">Lokasi File Logo</label>
+                <input type="text" id="adminLogoPath" class="input-field" placeholder="main/logo.png" />
+              </div>
+            </div>
+
+            <div class="form-row-2">
+              <div>
+                <label class="form-label" for="adminKetuaName">Nama Ketua Kelompok</label>
+                <input type="text" id="adminKetuaName" class="input-field" placeholder="Nama Ketua KKN" />
+              </div>
+              <div>
+                <label class="form-label" for="adminBendaharaName">Nama Bendahara</label>
+                <input type="text" id="adminBendaharaName" class="input-field" placeholder="Nama Bendahara KKN" />
+              </div>
+            </div>
+
+            <div class="admin-btn-row">
+              <button id="btnSaveIdentity" class="btn btn-primary">Simpan Pengaturan</button>
+              <button id="btnResetDefault" class="btn btn-outline">Reset Bawaan</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Editor Manual Darurat -->
+        <div class="admin-box mt-section">
+          <div class="card-header wrap-header">
+            <div>
+              <h3>3. Tambah / Koreksi Data Lokal</h3>
+              <p class="card-desc">Gunakan jika perlu memperbarui tampilan seketika sebelum sinkronisasi Excel berikutnya</p>
+            </div>
+          </div>
+          <div class="quick-edit-grid">
+            <select id="editTypeSelect" class="input-field">
+              <option value="expense">Tambah Pengeluaran</option>
+              <option value="income">Ubah Iuran Anggota</option>
+            </select>
+            <select id="editCategoryOrMember" class="input-field"></select>
+            <input type="text" id="editItemName" class="input-field" placeholder="Nama barang / keterangan" />
+            <input type="number" id="editItemQty" class="input-field" placeholder="Jumlah" value="1" min="1" />
+            <input type="number" id="editItemPrice" class="input-field" placeholder="Nominal / Harga satuan" min="0" />
+            <button id="btnApplyQuickEdit" class="btn btn-primary">Terapkan</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Navigasi Bawah Khusus Ponsel -->
+  <nav class="mobile-bottom-nav" aria-label="Navigasi Ponsel">
+    <button class="mobile-nav-item active" data-view="ringkasan">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+        <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+        <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+        <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+      </svg>
+      <span>Ringkasan</span>
+    </button>
+    <button class="mobile-nav-item" data-view="pemasukan">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+        <circle cx="9" cy="7" r="4"></circle>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+      </svg>
+      <span>Pemasukan</span>
+    </button>
+    <button class="mobile-nav-item" data-view="pengeluaran">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="8" y1="6" x2="21" y2="6"></line>
+        <line x1="8" y1="12" x2="21" y2="12"></line>
+        <line x1="8" y1="18" x2="21" y2="18"></line>
+        <line x1="3" y1="6" x2="3.01" y2="6"></line>
+        <line x1="3" y1="12" x2="3.01" y2="12"></line>
+        <line x1="3" y1="18" x2="3.01" y2="18"></line>
+      </svg>
+      <span>Pengeluaran</span>
+    </button>
+    <button class="mobile-nav-item" data-view="admin" id="mobileAdminTab">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+      </svg>
+      <span>Admin</span>
+    </button>
+  </nav>
+
+  <!-- Modal Autentikasi Password Admin -->
+  <div id="adminAuthModal" class="modal-backdrop" aria-hidden="true">
+    <div class="modal-box" role="dialog" aria-labelledby="modalAuthTitle">
+      <div class="modal-header">
+        <h3 id="modalAuthTitle">Akses Panel Admin</h3>
+        <button id="btnCloseAuthModal" class="btn-close" aria-label="Tutup">✕</button>
+      </div>
+      <p class="modal-desc">Masukkan kata sandi admin untuk mengatur tautan Excel Online dan konfigurasi sistem.</p>
+      <form id="adminAuthForm">
+        <div class="password-wrapper">
+          <input
+            type="password"
+            id="adminPasswordInput"
+            class="input-field"
+            placeholder="Masukkan kata sandi admin"
+            autocomplete="current-password"
+            required
+          />
+          <button type="button" id="btnTogglePassword" class="btn-eye" aria-label="Tampilkan kata sandi">👁</button>
+        </div>
+        <p id="authErrorMsg" class="error-text" style="display: none;">Kata sandi salah. Silakan periksa kembali.</p>
+        <div class="modal-actions">
+          <button type="button" id="btnCancelAuth" class="btn btn-outline">Batal</button>
+          <button type="submit" class="btn btn-primary">Buka Admin</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Notifikasi Toast -->
+  <div id="toastNotification" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
