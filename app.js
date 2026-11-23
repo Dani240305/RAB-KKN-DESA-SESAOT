@@ -1,12 +1,12 @@
 // ============================================================================
 // 1. KONFIGURASI SISTEM (DATA 100% DIAMBIL LANGSUNG DARI EXCEL ONLINE)
 // ============================================================================
-const SCRIPT_DATA_VERSION = "2.2";
+const SCRIPT_DATA_VERSION = "2.3";
 
 const ADMIN_PASSWORD_HASH = "W1k1d14Ever@";
-const STORAGE_KEY_CONFIG = "rab_kkn_config_v6";
-const STORAGE_KEY_DATA = "rab_kkn_data_cache_v6";
-const STORAGE_KEY_SCRIPT_VER = "rab_kkn_script_version_v6";
+const STORAGE_KEY_CONFIG = "rab_kkn_config_v7";
+const STORAGE_KEY_DATA = "rab_kkn_data_cache_v7";
+const STORAGE_KEY_SCRIPT_VER = "rab_kkn_script_version_v7";
 
 const DEFAULT_CONFIG = {
   excelUrl:
@@ -18,7 +18,7 @@ const DEFAULT_CONFIG = {
   kknTitle: "RAB & Kas KKN",
   kknSubtitle: "Laporan Pemasukan & Pengeluaran Realtime",
   targetIuran: 1500000,
-  logoPath: "logo.png",
+  logoPath: "main/logo.png",
   ketuaName: "AHMAD DANI SARKAWI",
   bendaharaName: "ULUL AZMI MAWARTI"
 };
@@ -61,9 +61,7 @@ function parseNumber(val) {
   if (typeof val === "number") return isNaN(val) ? 0 : val;
   if (!val) return 0;
   let str = String(val).trim();
-  // Hapus simbol mata uang dan spasi
   str = str.replace(/rp/gi, "").replace(/\s+/g, "");
-  // Jika format ribuan Indonesia dengan titik (misal 1.500.000)
   if (/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(str)) {
     str = str.replace(/\./g, "").replace(",", ".");
   } else {
@@ -136,7 +134,6 @@ function saveDataToCache() {
   localStorage.setItem(STORAGE_KEY_SCRIPT_VER, SCRIPT_DATA_VERSION);
 }
 
-// Bangun URL unduhan mentah .xlsx dari tautan OneDrive / Google Sheets
 function getDirectDownloadUrls(rawUrl) {
   const url = (rawUrl || "").trim();
   if (!url) return [];
@@ -177,6 +174,17 @@ function getDirectDownloadUrls(rawUrl) {
   return [...new Set(list)];
 }
 
+function detectExpenseCategory(rawCell) {
+  const t = normText(rawCell);
+  if (!t || t.includes("TOTAL") || t.includes("REKAP") || t.includes("PEMASUKAN")) return null;
+  if (t === "POSKO" || t.endsWith(" POSKO")) return "POSKO";
+  if (t === "LAIN-LAIN" || t === "LAIN - LAIN" || t.includes("LAIN-LAIN") || t.includes("LAIN LAIN")) return "LAIN-LAIN";
+  if (t === "PROKER" || t.endsWith(" PROKER")) return "PROKER";
+  if (t === "PDD" || t.endsWith(" PDD")) return "PDD";
+  if (t === "KONSUMSI" || t.endsWith(" KONSUMSI")) return "KONSUMSI";
+  return null;
+}
+
 // Parser Dinamis Berbasis Deteksi Header Kolom RAB KKN.xlsx
 function parseRabWorkbook(workbook) {
   const sheetName =
@@ -187,7 +195,7 @@ function parseRabWorkbook(workbook) {
   const members = [];
   const expenses = [];
 
-  // 1. Deteksi Otomatis Tabel PEMASUKAN ANGGOTA berdasarkan header "NAMA"
+  // 1. Deteksi Tabel PEMASUKAN ANGGOTA
   let memberHeaderFound = false;
   for (let r = 0; r < rows.length && !memberHeaderFound; r++) {
     const row = rows[r] || [];
@@ -197,7 +205,6 @@ function parseRabWorkbook(workbook) {
         let noCol = Math.max(0, c - 1);
         let paidCol = -1;
 
-        // Cek baris header (r dan r+1 untuk mengantisipasi merge cell)
         const scanRows = [rows[r] || [], rows[r + 1] || []];
         for (const sRow of scanRows) {
           for (let k = Math.max(0, c - 2); k <= Math.min(sRow.length - 1, c + 6); k++) {
@@ -213,12 +220,12 @@ function parseRabWorkbook(workbook) {
 
         if (paidCol === -1) paidCol = namaCol + 2;
 
-        // Tentukan baris awal data anggota
-        const startDataRow = normText((rows[r + 1] || [])[namaCol]) === "" &&
+        const startDataRow =
+          normText((rows[r + 1] || [])[namaCol]) === "" &&
           (normText((rows[r + 1] || [])[paidCol]).includes("TOTAL") ||
             normText((rows[r + 1] || [])[paidCol]).includes("IURAN"))
-          ? r + 2
-          : r + 1;
+            ? r + 2
+            : r + 1;
 
         for (let dr = startDataRow; dr < rows.length; dr++) {
           const dRow = rows[dr] || [];
@@ -246,104 +253,135 @@ function parseRabWorkbook(workbook) {
     }
   }
 
-  // 2. Deteksi Otomatis 5 Blok Pengeluaran (POSKO, LAIN-LAIN, PROKER, PDD, KONSUMSI)
-  const validCategories = ["POSKO", "LAIN-LAIN", "PROKER", "PDD", "KONSUMSI"];
-
+  // 2. Deteksi 5 Blok Pengeluaran (POSKO, LAIN-LAIN, PROKER, PDD, KONSUMSI)
   for (let r = 0; r < rows.length; r++) {
     const row = rows[r] || [];
     for (let c = 0; c < row.length; c++) {
-      const title = normText(row[c]);
-      if (!validCategories.includes(title)) continue;
+      const category = detectExpenseCategory(row[c]);
+      if (!category) continue;
 
-      const headerRow = rows[r + 1] || [];
-      const scanStart = Math.max(0, c - 1);
-      const scanEnd = Math.min(headerRow.length - 1, c + 8);
+      // Cari baris header kolom di 1..4 baris di bawah judul kategori
+      let headerRowIdx = -1;
+      let cols = null;
 
-      let dateCol = -1;
-      let nameCol = -1;
-      let descCol = -1;
-      let qtyCol = -1;
-      let priceCol = -1;
-      let totalCol = -1;
-      let minCol = scanEnd;
-      let maxCol = scanStart;
+      for (let hr = r + 1; hr <= Math.min(rows.length - 1, r + 4); hr++) {
+        const candidateRow = rows[hr] || [];
+        const scanStart = Math.max(0, c - 2);
+        const scanEnd = Math.min(candidateRow.length - 1, c + 8);
 
-      for (let k = scanStart; k <= scanEnd; k++) {
-        const h = normText(headerRow[k]);
-        if (!h) continue;
+        let score = 0;
+        let dateCol = -1;
+        let nameCol = -1;
+        let descCol = -1;
+        let qtyCol = -1;
+        let priceCol = -1;
+        let totalCol = -1;
+        let minCol = scanEnd;
+        let maxCol = scanStart;
 
-        if (h === "NO" || h.includes("TANGGAL") || h.includes("TGL") ||
-            h.includes("NAMA") || h.includes("BARANG") || h.includes("DESKRIPSI") ||
-            h.includes("URAIAN") || h.includes("JENIS") || h.includes("KET") ||
-            h.includes("JUMLAH") || h.includes("QTY") || h.includes("HARGA") ||
-            h.includes("NOMINAL") || h.includes("TOTAL")) {
-          if (k < minCol) minCol = k;
-          if (k > maxCol) maxCol = k;
+        for (let k = scanStart; k <= scanEnd; k++) {
+          const h = normText(candidateRow[k]);
+          if (!h) continue;
+
+          const isHeaderWord =
+            h === "NO" ||
+            h.includes("TANGGAL") ||
+            h.includes("TGL") ||
+            h.includes("NAMA") ||
+            h.includes("BARANG") ||
+            h.includes("DESKRIPSI") ||
+            h.includes("URAIAN") ||
+            h.includes("JENIS") ||
+            h.includes("KET") ||
+            h.includes("JUMLAH") ||
+            h.includes("QTY") ||
+            h.includes("VOL") ||
+            h.includes("HARGA") ||
+            h.includes("SATUAN") ||
+            h.includes("NOMINAL") ||
+            h.includes("TOTAL");
+
+          if (isHeaderWord) {
+            score++;
+            if (k < minCol) minCol = k;
+            if (k > maxCol) maxCol = k;
+          }
+
+          if (h.includes("TANGGAL") || h.includes("TGL")) {
+            dateCol = k;
+          } else if (
+            h.includes("NAMA") ||
+            h.includes("BARANG") ||
+            h.includes("DESKRIPSI") ||
+            h.includes("URAIAN") ||
+            h.includes("JENIS")
+          ) {
+            if (nameCol === -1) nameCol = k;
+            else descCol = k;
+          } else if (h.includes("KET")) {
+            descCol = k;
+          } else if ((h.includes("JUMLAH") || h.includes("QTY") || h.includes("VOL")) && !h.includes("HARGA")) {
+            qtyCol = k;
+          } else if (h.includes("HARGA") || h.includes("SATUAN")) {
+            priceCol = k;
+          } else if (h.includes("NOMINAL") || h.includes("TOTAL")) {
+            totalCol = k;
+          }
         }
 
-        if (h.includes("TANGGAL") || h.includes("TGL")) {
-          dateCol = k;
-        } else if (
-          h.includes("NAMA") ||
-          h.includes("BARANG") ||
-          h.includes("DESKRIPSI") ||
-          h.includes("URAIAN") ||
-          h.includes("JENIS")
-        ) {
-          if (nameCol === -1) nameCol = k;
-          else descCol = k;
-        } else if (h.includes("KET")) {
-          descCol = k;
-        } else if ((h.includes("JUMLAH") || h.includes("QTY") || h.includes("VOL")) && !h.includes("HARGA")) {
-          qtyCol = k;
-        } else if (h.includes("HARGA") || h.includes("SATUAN")) {
-          priceCol = k;
-        } else if (h.includes("NOMINAL") || h.includes("TOTAL")) {
-          totalCol = k;
+        if (score >= 2 && maxCol >= minCol) {
+          headerRowIdx = hr;
+          cols = { dateCol, nameCol, descCol, qtyCol, priceCol, totalCol, minCol, maxCol };
+          break;
         }
       }
 
-      if (maxCol < minCol) continue;
+      if (headerRowIdx === -1 || !cols) continue;
 
       // Baca baris item di bawah header sampai ketemu TOTAL atau judul kategori berikutnya
-      for (let dr = r + 2; dr < rows.length; dr++) {
+      for (let dr = headerRowIdx + 1; dr < rows.length; dr++) {
         const dRow = rows[dr] || [];
         let hitBoundary = false;
 
-        for (let k = minCol; k <= maxCol; k++) {
+        for (let k = cols.minCol; k <= cols.maxCol; k++) {
           const cellVal = normText(dRow[k]);
-          if (
-            cellVal.includes("TOTAL") ||
-            validCategories.includes(cellVal)
-          ) {
+          if (cellVal.includes("TOTAL") || detectExpenseCategory(cellVal)) {
             hitBoundary = true;
             break;
           }
         }
         if (hitBoundary) break;
 
-        const rawName = nameCol !== -1 ? String(dRow[nameCol] || "").trim() : "";
-        const rawDesc = descCol !== -1 ? String(dRow[descCol] || "").trim() : "";
+        // Lewati jika baris ini adalah sisa sel gabungan header 2 baris
+        const isSubHeader = [cols.nameCol, cols.descCol, cols.qtyCol, cols.priceCol, cols.totalCol].some((colIdx) => {
+          if (colIdx === -1) return false;
+          const v = normText(dRow[colIdx]);
+          return v === "SATUAN" || v === "BARANG" || v === "HARGA SATUAN" || v === "NAMA BARANG";
+        });
+        if (isSubHeader) continue;
+
+        const rawName = cols.nameCol !== -1 ? String(dRow[cols.nameCol] || "").trim() : "";
+        const rawDesc = cols.descCol !== -1 ? String(dRow[cols.descCol] || "").trim() : "";
         const combinedName =
           rawName && rawDesc && rawName !== rawDesc
             ? `${rawName} - ${rawDesc}`
             : rawName || rawDesc;
 
-        const dateVal = dateCol !== -1 ? formatExcelDate(dRow[dateCol]) : "-";
-        const qtyVal = qtyCol !== -1 ? parseNumber(dRow[qtyCol]) : 0;
-        const priceVal = priceCol !== -1 ? parseNumber(dRow[priceCol]) : 0;
+        const dateVal = cols.dateCol !== -1 ? formatExcelDate(dRow[cols.dateCol]) : "-";
+        const qtyVal = cols.qtyCol !== -1 ? parseNumber(dRow[cols.qtyCol]) : 0;
+        const priceVal = cols.priceCol !== -1 ? parseNumber(dRow[cols.priceCol]) : 0;
         const totalVal =
-          totalCol !== -1
-            ? parseNumber(dRow[totalCol])
+          cols.totalCol !== -1
+            ? parseNumber(dRow[cols.totalCol])
             : qtyVal > 0 && priceVal > 0
             ? qtyVal * priceVal
             : 0;
 
         if (combinedName || totalVal > 0) {
           expenses.push({
-            category: title,
+            category,
             date: dateVal,
-            name: combinedName || `Item ${title}`,
+            name: combinedName || `Item ${category}`,
             qty: qtyVal || (totalVal > 0 ? 1 : 0),
             unitPrice: priceVal,
             total: totalVal
@@ -1212,7 +1250,7 @@ document.addEventListener("DOMContentLoaded", () => {
     appConfig.kknTitle = document.getElementById("adminKknTitle").value.trim() || DEFAULT_CONFIG.kknTitle;
     appConfig.kknSubtitle = document.getElementById("adminKknSubtitle").value.trim() || DEFAULT_CONFIG.kknSubtitle;
     appConfig.targetIuran = Number(document.getElementById("adminTargetIuran").value) || 0;
-    appConfig.logoPath = document.getElementById("adminLogoPath").value.trim() || "logo.png";
+    appConfig.logoPath = document.getElementById("adminLogoPath").value.trim() || "main/logo.png";
     appConfig.ketuaName = document.getElementById("adminKetuaName").value.trim() || DEFAULT_CONFIG.ketuaName;
     appConfig.bendaharaName = document.getElementById("adminBendaharaName").value.trim() || DEFAULT_CONFIG.bendaharaName;
     saveConfig();
