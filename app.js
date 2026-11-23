@@ -1,16 +1,18 @@
 // ============================================================================
 // 1. KONFIGURASI SISTEM (DATA 100% DIAMBIL LANGSUNG DARI EXCEL ONLINE)
 // ============================================================================
-const SCRIPT_DATA_VERSION = "2.0";
+const SCRIPT_DATA_VERSION = "2.1";
 
 const ADMIN_PASSWORD_HASH = "W1k1d14Ever@";
-const STORAGE_KEY_CONFIG = "rab_kkn_config_v4";
-const STORAGE_KEY_DATA = "rab_kkn_data_cache_v4";
-const STORAGE_KEY_SCRIPT_VER = "rab_kkn_script_version_v4";
+const STORAGE_KEY_CONFIG = "rab_kkn_config_v5";
+const STORAGE_KEY_DATA = "rab_kkn_data_cache_v5";
+const STORAGE_KEY_SCRIPT_VER = "rab_kkn_script_version_v5";
 
 const DEFAULT_CONFIG = {
   excelUrl:
     "https://onedrive.live.com/:x:/g/personal/0A4873D3EB635F62/IQAxUwzNi4F6T6fH2heV9QpjAbR2TKqf3GP3fLmR2kK50kc?resid=0A4873D3EB635F62!scd0c5331818b4f7aa7c7da1795f50a63&ithint=file%2Cxlsx&e=GMcqhA&migratedtospo=true&redeem=aHR0cHM6Ly8xZHJ2Lm1zL3gvYy8wYTQ4NzNkM2ViNjM1ZjYyL0lRQXhVd3pOaTRGNlQ2ZkgyaGVWOVFwakFiUjJUS3FmM0dQM2ZMbVIya0s1MGtjP2U9R01jcWhB",
+  // Tempelkan Web App URL dari Google Apps Script di bawah ini:
+  relayUrl: "",
   syncInterval: 15000,
   corsMode: "auto",
   kknTitle: "RAB & Kas KKN",
@@ -21,7 +23,6 @@ const DEFAULT_CONFIG = {
   bendaharaName: "ULUL AZMI MAWARTI"
 };
 
-// Kosongkan data bawaan agar 100% mengandalkan tarikan langsung dari Excel Online
 const SCRIPT_RAB_DATA = {
   lastUpdated: "Menunggu sinkronisasi Excel Online...",
   sourceMode: "empty",
@@ -77,7 +78,7 @@ function showToast(msg) {
   toast.textContent = msg;
   toast.classList.add("show");
   clearTimeout(toast._timer);
-  toast._timer = setTimeout(() => toast.classList.remove("show"), 3200);
+  toast._timer = setTimeout(() => toast.classList.remove("show"), 3500);
 }
 
 function loadConfig() {
@@ -115,83 +116,46 @@ function saveDataToCache() {
   localStorage.setItem(STORAGE_KEY_SCRIPT_VER, SCRIPT_DATA_VERSION);
 }
 
-// Encode URL menjadi token OneDrive Shares API (u!...) untuk unduh langsung file mentah .xlsx
-function encodeOneDriveShareUrl(shareUrl) {
-  const base64 = btoa(unescape(encodeURIComponent(shareUrl)))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-  return `https://api.onedrive.com/v1.0/shares/u!${base64}/root/content`;
-}
-
-// Konversi Tautan OneDrive / Excel Online menjadi URL Unduhan Biner .xlsx
-function buildCandidateUrls(rawUrl, mode) {
+// Bangun URL unduhan mentah .xlsx dari tautan OneDrive / Google Sheets
+function getDirectDownloadUrls(rawUrl) {
   const url = (rawUrl || "").trim();
   if (!url) return [];
-  const candidates = [];
+  const list = [];
 
   if (url.includes("docs.google.com/spreadsheets")) {
     const match = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
     if (match) {
-      candidates.push(`https://docs.google.com/spreadsheets/d/${match[1]}/export?format=xlsx`);
+      list.push(`https://docs.google.com/spreadsheets/d/${match[1]}/export?format=xlsx`);
     }
   }
 
   if (url.includes("onedrive.live.com") || url.includes("1drv.ms")) {
     try {
-      const parsed = new URL(url);
-      const resid = parsed.searchParams.get("resid");
-      const authkey = parsed.searchParams.get("authkey");
-      const redeem = parsed.searchParams.get("redeem");
+      // Tambahkan download=1 pada link utama (memicu redirect langsung ke file .xlsx)
+      const directParam = new URL(url);
+      directParam.searchParams.set("download", "1");
+      list.push(directParam.toString());
 
-      // 1. Jalur resmi OneDrive Shares API dari parameter redeem (1drv.ms)
+      const redeem = directParam.searchParams.get("redeem");
       if (redeem) {
         try {
           const decodedRedeem = atob(redeem);
-          candidates.push(encodeOneDriveShareUrl(decodedRedeem));
-          candidates.push(`${decodedRedeem}${decodedRedeem.includes("?") ? "&" : "?"}download=1`);
+          list.push(`${decodedRedeem}${decodedRedeem.includes("?") ? "&" : "?"}download=1`);
         } catch {}
       }
 
-      // 2. Jalur resmi OneDrive Shares API dari URL utama
-      candidates.push(encodeOneDriveShareUrl(url));
-
-      // 3. Jalur download langsung berdasarkan resid
+      const resid = directParam.searchParams.get("resid");
+      const authkey = directParam.searchParams.get("authkey");
       if (resid) {
         let dlUrl = `https://onedrive.live.com/download?resid=${encodeURIComponent(resid)}`;
         if (authkey) dlUrl += `&authkey=${encodeURIComponent(authkey)}`;
-        candidates.push(dlUrl);
+        list.push(dlUrl);
       }
-
-      const directParam = new URL(url);
-      directParam.searchParams.set("download", "1");
-      candidates.push(directParam.toString());
     } catch {}
   }
 
-  candidates.push(url);
-
-  // Tambahkan timestamp anti-cache agar browser selalu menarik versi terbaru dari Excel Online
-  const bust = `_t=${Date.now()}`;
-  const withCacheBust = [...new Set(candidates)].map(
-    (u) => `${u}${u.includes("?") ? "&" : "?"}${bust}`
-  );
-
-  const finalUrls = [];
-  for (const target of withCacheBust) {
-    if (mode === "direct") {
-      finalUrls.push(target);
-    } else if (mode === "corsproxy") {
-      finalUrls.push(`https://corsproxy.io/?${encodeURIComponent(target)}`);
-    } else if (mode === "allorigins") {
-      finalUrls.push(`https://api.allorigins.win/raw?url=${encodeURIComponent(target)}`);
-    } else {
-      finalUrls.push(target);
-      finalUrls.push(`https://corsproxy.io/?${encodeURIComponent(target)}`);
-      finalUrls.push(`https://api.allorigins.win/raw?url=${encodeURIComponent(target)}`);
-    }
-  }
-  return [...new Set(finalUrls)];
+  list.push(url);
+  return [...new Set(list)];
 }
 
 // Parser Khusus Struktur Sheet RAB KKN.xlsx
@@ -334,7 +298,45 @@ function parseRabWorkbook(workbook) {
   };
 }
 
-// Sinkronisasi Langsung dari Excel Online & Simpan Hasilnya ke Cache Offline
+// Tarik workbook melalui Google Apps Script Relay (Base64 JSON)
+async function fetchViaAppsScriptRelay(relayUrl, targetDownloadUrl) {
+  const endpoint = `${relayUrl.trim()}?url=${encodeURIComponent(targetDownloadUrl)}&_t=${Date.now()}`;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 14000);
+
+  const response = await fetch(endpoint, { signal: controller.signal, cache: "no-store" });
+  clearTimeout(timeoutId);
+
+  if (!response.ok) return null;
+  const payload = await response.json();
+  if (!payload || !payload.ok || !payload.base64) return null;
+
+  // Pastikan isi Base64 adalah file ZIP/XLSX valid (diawali "UEs" = "PK")
+  if (!payload.base64.startsWith("UEs")) return null;
+
+  return XLSX.read(payload.base64, { type: "base64" });
+}
+
+// Tarik workbook biner langsung atau via proxy cadangan
+async function fetchBinaryWorkbook(fetchUrl) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 11000);
+
+  const response = await fetch(fetchUrl, { signal: controller.signal, cache: "no-store" });
+  clearTimeout(timeoutId);
+
+  if (!response.ok) return null;
+  const arrayBuffer = await response.arrayBuffer();
+  const uint8 = new Uint8Array(arrayBuffer);
+
+  if (uint8.length < 4 || uint8[0] !== 0x50 || uint8[1] !== 0x4b) {
+    return null;
+  }
+
+  return XLSX.read(arrayBuffer, { type: "array" });
+}
+
+// Sinkronisasi Utama dari Excel Online
 async function syncFromExcelOnline(silent = false) {
   const badge = document.getElementById("syncBadge");
   const badgeText = document.getElementById("syncStatusText");
@@ -344,36 +346,54 @@ async function syncFromExcelOnline(silent = false) {
   badgeText.textContent = "Menarik Excel...";
   syncBtn.classList.add("spinning");
 
-  const urls = buildCandidateUrls(appConfig.excelUrl, appConfig.corsMode);
+  const downloadUrls = getDirectDownloadUrls(appConfig.excelUrl);
   let syncedSuccess = false;
 
-  for (const targetUrl of urls) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
-      const response = await fetch(targetUrl, {
-        signal: controller.signal,
-        cache: "no-store"
-      });
-      clearTimeout(timeoutId);
+  // Jalur 1 (Paling Stabil): Gunakan Google Apps Script Relay jika sudah diisi
+  if (appConfig.relayUrl && appConfig.relayUrl.trim()) {
+    for (const dlUrl of downloadUrls) {
+      try {
+        const workbook = await fetchViaAppsScriptRelay(appConfig.relayUrl, dlUrl);
+        if (workbook) {
+          rabData = parseRabWorkbook(workbook);
+          saveDataToCache();
+          syncedSuccess = true;
+          break;
+        }
+      } catch {}
+    }
+  }
 
-      if (!response.ok) continue;
-      const arrayBuffer = await response.arrayBuffer();
-      const uint8 = new Uint8Array(arrayBuffer);
+  // Jalur 2 (Cadangan): Coba langsung & proxy publik jika relay belum dipasang
+  if (!syncedSuccess) {
+    const bust = `_t=${Date.now()}`;
+    const candidateFetchUrls = [];
 
-      // Pastikan respons adalah file .xlsx valid (header ZIP PK)
-      if (uint8.length < 4 || uint8[0] !== 0x50 || uint8[1] !== 0x4b) {
-        continue;
+    for (const target of downloadUrls) {
+      const bustedTarget = `${target}${target.includes("?") ? "&" : "?"}${bust}`;
+      if (appConfig.corsMode === "direct") {
+        candidateFetchUrls.push(bustedTarget);
+      } else if (appConfig.corsMode === "corsproxy") {
+        candidateFetchUrls.push(`https://corsproxy.io/?${encodeURIComponent(bustedTarget)}`);
+      } else if (appConfig.corsMode === "allorigins") {
+        candidateFetchUrls.push(`https://api.allorigins.win/raw?url=${encodeURIComponent(bustedTarget)}`);
+      } else {
+        candidateFetchUrls.push(bustedTarget);
+        candidateFetchUrls.push(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(bustedTarget)}`);
+        candidateFetchUrls.push(`https://api.allorigins.win/raw?url=${encodeURIComponent(bustedTarget)}`);
       }
+    }
 
-      const workbook = XLSX.read(arrayBuffer, { type: "array" });
-      const parsed = parseRabWorkbook(workbook);
-      rabData = parsed;
-      saveDataToCache();
-      syncedSuccess = true;
-      break;
-    } catch {
-      // Lanjut ke kandidat URL berikutnya
+    for (const url of candidateFetchUrls) {
+      try {
+        const workbook = await fetchBinaryWorkbook(url);
+        if (workbook) {
+          rabData = parseRabWorkbook(workbook);
+          saveDataToCache();
+          syncedSuccess = true;
+          break;
+        }
+      } catch {}
     }
   }
 
@@ -382,12 +402,12 @@ async function syncFromExcelOnline(silent = false) {
   if (syncedSuccess) {
     badge.className = "sync-badge status-live";
     badgeText.textContent = "Live Excel Aktif";
-    if (!silent) showToast("Data terbaru berhasil ditarik langsung dari Excel Online!");
+    if (!silent) showToast("Data terbaru berhasil ditarik dari Excel Online!");
   } else {
     badge.className = "sync-badge status-offline";
     badgeText.textContent = rabData.members.length > 0 ? "Cache Terakhir" : "Gagal Tarik Excel";
     if (!silent) {
-      showToast("Gagal menarik file langsung dari OneDrive. Pastikan izin berbagi publik aktif atau coba unggah .xlsx.");
+      showToast("Gagal menarik Excel Online. Pasang URL Jembatan Apps Script di menu Admin.");
     }
   }
 
@@ -994,6 +1014,8 @@ function updateAdminLockBadge() {
 
 function populateAdminFields() {
   document.getElementById("adminExcelUrl").value = appConfig.excelUrl;
+  const relayInput = document.getElementById("adminRelayUrl");
+  if (relayInput) relayInput.value = appConfig.relayUrl || "";
   document.getElementById("adminSyncInterval").value = String(appConfig.syncInterval);
   document.getElementById("adminCorsProxy").value = appConfig.corsMode;
   document.getElementById("adminKknTitle").value = appConfig.kknTitle;
@@ -1095,6 +1117,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("btnSaveAndSync").addEventListener("click", () => {
     appConfig.excelUrl = document.getElementById("adminExcelUrl").value.trim();
+    const relayInput = document.getElementById("adminRelayUrl");
+    if (relayInput) appConfig.relayUrl = relayInput.value.trim();
     appConfig.syncInterval = Number(document.getElementById("adminSyncInterval").value);
     appConfig.corsMode = document.getElementById("adminCorsProxy").value;
     saveConfig();
