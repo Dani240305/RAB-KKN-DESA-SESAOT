@@ -3,7 +3,48 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Monitoring RAB & Kas KKN Realtime</title>
+  <title>Monitoring RAB & Kas KKN</title>
+  <!-- Favicon Tab Browser & Ikon Layar Utama HP -->
+  <link rel="icon" type="image/png" href="logo.png" />
+  <link rel="apple-touch-icon" href="logo.png" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0f766e" />
+
+  <!-- Preview Link Website untuk WhatsApp, Telegram & Media Sosial -->
+  <meta name="description" content="Pantau pemasukan iuran anggota, rincian pengeluaran, dan sisa saldo kas KKN secara realtime." />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="RAB & Kas KKN" />
+  <meta property="og:title" content="RAB & Kas KKN — Laporan Keuangan Realtime" />
+  <meta property="og:description" content="Cek transparansi pemasukan iuran anggota dan rincian pengeluaran pos anggaran KKN secara realtime." />
+  <meta property="og:url" content="https://dani240305.github.io/RAB-KKN-DESA-SESAOT/" />
+  <meta property="og:image" content="https://dani240305.github.io/RAB-KKN-DESA-SESAOT/logo.png" />
+  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image:width" content="512" />
+  <meta property="og:image:height" content="512" />
+
+  <!-- Preview Kartu Twitter / X -->
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="RAB & Kas KKN — Laporan Keuangan Realtime" />
+  <meta name="twitter:description" content="Cek transparansi pemasukan iuran anggota dan rincian pengeluaran pos anggaran KKN secara realtime." />
+  <meta name="twitter:image" content="https://dani240305.github.io/RAB-KKN-DESA-SESAOT/logo.png" />
+  <!-- Footer Identitas dengan Logo -->
+    <footer class="app-footer">
+      <img src="logo.png" alt="Logo KKN" class="footer-logo" onerror="this.style.display='none'" />
+      <div class="footer-info">
+        <strong id="footerTitle">RAB & Kas KKN</strong>
+        <span>Transparansi Laporan Keuangan & Realisasi Anggaran</span>
+      </div>
+    </footer>
+  <!-- Modal Autentikasi Password Admin -->
+  <div id="adminAuthModal" class="modal-backdrop" aria-hidden="true">
+    <div class="modal-box" role="dialog" aria-labelledby="modalAuthTitle">
+      <div class="modal-logo-badge">
+        <img src="logo.png" alt="Logo KKN" onerror="this.parentElement.style.display='none'" />
+      </div>
+      <div class="modal-header">
+        <h3 id="modalAuthTitle">Akses Panel Admin</h3>
+        <button id="btnCloseAuthModal" class="btn-close" aria-label="Tutup">✕</button>
+      </div>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
