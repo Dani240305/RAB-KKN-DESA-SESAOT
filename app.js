@@ -12,7 +12,7 @@ const DEFAULT_CONFIG = {
   excelUrl:
     "https://onedrive.live.com/:x:/g/personal/0A4873D3EB635F62/IQAxUwzNi4F6T6fH2heV9QpjAbR2TKqf3GP3fLmR2kK50kc?resid=0A4873D3EB635F62!scd0c5331818b4f7aa7c7da1795f50a63&ithint=file%2Cxlsx&e=GMcqhA&migratedtospo=true&redeem=aHR0cHM6Ly8xZHJ2Lm1zL3gvYy8wYTQ4NzNkM2ViNjM1ZjYyL0lRQXhVd3pOaTRGNlQ2ZkgyaGVWOVFwakFiUjJUS3FmM0dQM2ZMbVIya0s1MGtjP2U9R01jcWhB",
   // Tempelkan Web App URL dari Google Apps Script di bawah ini:
-  relayUrl: "",
+  relayUrl: "https://script.google.com/macros/s/AKfycbyLXx3Hqpm8ry7gkg2Lqz5V-15WazI3BdpOZ21WWPw-aLjG6CxoYMVfgI1BTEyE3XxI/exec",
   syncInterval: 15000,
   corsMode: "auto",
   kknTitle: "RAB & Kas KKN",
