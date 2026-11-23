@@ -1,18 +1,18 @@
 // ============================================================================
 // 1. KONFIGURASI SISTEM (DATA 100% DIAMBIL LANGSUNG DARI EXCEL ONLINE)
 // ============================================================================
-const SCRIPT_DATA_VERSION = "2.1";
+const SCRIPT_DATA_VERSION = "2.2";
 
 const ADMIN_PASSWORD_HASH = "W1k1d14Ever@";
-const STORAGE_KEY_CONFIG = "rab_kkn_config_v5";
-const STORAGE_KEY_DATA = "rab_kkn_data_cache_v5";
-const STORAGE_KEY_SCRIPT_VER = "rab_kkn_script_version_v5";
+const STORAGE_KEY_CONFIG = "rab_kkn_config_v6";
+const STORAGE_KEY_DATA = "rab_kkn_data_cache_v6";
+const STORAGE_KEY_SCRIPT_VER = "rab_kkn_script_version_v6";
 
 const DEFAULT_CONFIG = {
   excelUrl:
     "https://onedrive.live.com/:x:/g/personal/0A4873D3EB635F62/IQAxUwzNi4F6T6fH2heV9QpjAbR2TKqf3GP3fLmR2kK50kc?resid=0A4873D3EB635F62!scd0c5331818b4f7aa7c7da1795f50a63&ithint=file%2Cxlsx&e=GMcqhA&migratedtospo=true&redeem=aHR0cHM6Ly8xZHJ2Lm1zL3gvYy8wYTQ4NzNkM2ViNjM1ZjYyL0lRQXhVd3pOaTRGNlQ2ZkgyaGVWOVFwakFiUjJUS3FmM0dQM2ZMbVIya0s1MGtjP2U9R01jcWhB",
-  // Tempelkan Web App URL dari Google Apps Script di bawah ini:
-  relayUrl: "https://script.google.com/macros/s/AKfycbyLXx3Hqpm8ry7gkg2Lqz5V-15WazI3BdpOZ21WWPw-aLjG6CxoYMVfgI1BTEyE3XxI/exec",
+  relayUrl:
+    "https://script.google.com/macros/s/AKfycbzzCptuldV9WBFTrDdcaTj-lBrw-_DG6tIKYZnX-unY7k5PXjkecpqXM643zUPUwau0/exec",
   syncInterval: 15000,
   corsMode: "auto",
   kknTitle: "RAB & Kas KKN",
@@ -58,10 +58,19 @@ function formatRupiah(num) {
 }
 
 function parseNumber(val) {
-  if (typeof val === "number") return val;
+  if (typeof val === "number") return isNaN(val) ? 0 : val;
   if (!val) return 0;
-  const cleaned = String(val).replace(/[^0-9.-]+/g, "");
-  return Number(cleaned) || 0;
+  let str = String(val).trim();
+  // Hapus simbol mata uang dan spasi
+  str = str.replace(/rp/gi, "").replace(/\s+/g, "");
+  // Jika format ribuan Indonesia dengan titik (misal 1.500.000)
+  if (/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(str)) {
+    str = str.replace(/\./g, "").replace(",", ".");
+  } else {
+    str = str.replace(/[^0-9.-]+/g, "");
+  }
+  const num = Number(str);
+  return isNaN(num) ? 0 : num;
 }
 
 function formatExcelDate(val) {
@@ -70,7 +79,15 @@ function formatExcelDate(val) {
     const date = new Date(Math.round((val - 25569) * 86400 * 1000));
     return date.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
   }
-  return String(val).trim() || "-";
+  const str = String(val).trim();
+  return str || "-";
+}
+
+function normText(val) {
+  return String(val || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
 }
 
 function showToast(msg) {
@@ -84,7 +101,10 @@ function showToast(msg) {
 function loadConfig() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_CONFIG);
-    return raw ? { ...DEFAULT_CONFIG, ...JSON.parse(raw) } : { ...DEFAULT_CONFIG };
+    if (!raw) return { ...DEFAULT_CONFIG };
+    const parsed = JSON.parse(raw);
+    if (!parsed.relayUrl) parsed.relayUrl = DEFAULT_CONFIG.relayUrl;
+    return { ...DEFAULT_CONFIG, ...parsed };
   } catch {
     return { ...DEFAULT_CONFIG };
   }
@@ -131,7 +151,6 @@ function getDirectDownloadUrls(rawUrl) {
 
   if (url.includes("onedrive.live.com") || url.includes("1drv.ms")) {
     try {
-      // Tambahkan download=1 pada link utama (memicu redirect langsung ke file .xlsx)
       const directParam = new URL(url);
       directParam.searchParams.set("download", "1");
       list.push(directParam.toString());
@@ -158,7 +177,7 @@ function getDirectDownloadUrls(rawUrl) {
   return [...new Set(list)];
 }
 
-// Parser Khusus Struktur Sheet RAB KKN.xlsx
+// Parser Dinamis Berbasis Deteksi Header Kolom RAB KKN.xlsx
 function parseRabWorkbook(workbook) {
   const sheetName =
     workbook.SheetNames.find((n) => n.toUpperCase().includes("LAPORAN")) || workbook.SheetNames[0];
@@ -168,123 +187,174 @@ function parseRabWorkbook(workbook) {
   const members = [];
   const expenses = [];
 
-  // Parse PEMASUKAN ANGGOTA
-  let inMembers = false;
-  for (let r = 0; r < rows.length; r++) {
-    const row = rows[r];
-    const colB = String(row[1] || "").trim().toUpperCase();
-    const colC = String(row[2] || "").trim().toUpperCase();
+  // 1. Deteksi Otomatis Tabel PEMASUKAN ANGGOTA berdasarkan header "NAMA"
+  let memberHeaderFound = false;
+  for (let r = 0; r < rows.length && !memberHeaderFound; r++) {
+    const row = rows[r] || [];
+    for (let c = 0; c < Math.min(row.length, 8); c++) {
+      if (normText(row[c]) === "NAMA") {
+        const namaCol = c;
+        let noCol = Math.max(0, c - 1);
+        let paidCol = -1;
 
-    if (colB === "NO" && colC === "NAMA") {
-      inMembers = true;
-      continue;
-    }
-    if (inMembers) {
-      if (colB.includes("TOTAL") || colC.includes("TOTAL")) {
-        inMembers = false;
-        continue;
-      }
-      const name = String(row[2] || "").trim();
-      if (name) {
-        members.push({
-          no: parseNumber(row[1]) || members.length + 1,
-          name,
-          note: String(row[3] || "").trim(),
-          paid: parseNumber(row[4])
-        });
-      }
-    }
-  }
+        // Cek baris header (r dan r+1 untuk mengantisipasi merge cell)
+        const scanRows = [rows[r] || [], rows[r + 1] || []];
+        for (const sRow of scanRows) {
+          for (let k = Math.max(0, c - 2); k <= Math.min(sRow.length - 1, c + 6); k++) {
+            const h = normText(sRow[k]);
+            if (h === "NO") noCol = k;
+            if (h.includes("TOTAL") || h.includes("NOMINAL") || h.includes("JUMLAH")) {
+              paidCol = k;
+            } else if (paidCol === -1 && h.includes("IURAN")) {
+              paidCol = k;
+            }
+          }
+        }
 
-  // Parse 5 Kategori Pengeluaran
-  function extractExpenseBlock(headerRowIdx, startCol, categoryName, isKonsumsi = false, isProker = false) {
-    for (let r = headerRowIdx + 1; r < rows.length; r++) {
-      const row = rows[r];
-      const firstCell = String(row[startCol] || "").trim().toUpperCase();
-      const secondCell = String(row[startCol + 1] || "").trim().toUpperCase();
-      const thirdCell = String(row[startCol + 2] || "").trim().toUpperCase();
+        if (paidCol === -1) paidCol = namaCol + 2;
 
-      if (
-        firstCell.includes("TOTAL") ||
-        secondCell.includes("TOTAL") ||
-        thirdCell.includes("TOTAL")
-      ) {
+        // Tentukan baris awal data anggota
+        const startDataRow = normText((rows[r + 1] || [])[namaCol]) === "" &&
+          (normText((rows[r + 1] || [])[paidCol]).includes("TOTAL") ||
+            normText((rows[r + 1] || [])[paidCol]).includes("IURAN"))
+          ? r + 2
+          : r + 1;
+
+        for (let dr = startDataRow; dr < rows.length; dr++) {
+          const dRow = rows[dr] || [];
+          const cellNo = normText(dRow[noCol]);
+          const cellName = String(dRow[namaCol] || "").trim();
+          const normName = normText(cellName);
+
+          if (cellNo.includes("TOTAL") || normName.includes("TOTAL") || normName.includes("JUMLAH")) {
+            break;
+          }
+
+          if (cellName && normName !== "NAMA") {
+            members.push({
+              no: parseNumber(dRow[noCol]) || members.length + 1,
+              name: cellName,
+              note: "",
+              paid: parseNumber(dRow[paidCol])
+            });
+          }
+        }
+
+        memberHeaderFound = true;
         break;
       }
-
-      if (isProker) {
-        const jenis = String(row[startCol] || "").trim();
-        const ket = String(row[startCol + 1] || "").trim();
-        const qty = parseNumber(row[startCol + 2]);
-        const unitPrice = parseNumber(row[startCol + 3]);
-        const total = parseNumber(row[startCol + 4]) || parseNumber(row[startCol + 5]) || qty * unitPrice;
-
-        if (jenis || ket || total > 0) {
-          expenses.push({
-            category: categoryName,
-            date: "-",
-            name: jenis && ket ? `${jenis} - ${ket}` : jenis || ket,
-            qty: qty || 1,
-            unitPrice,
-            total
-          });
-        }
-      } else if (isKonsumsi) {
-        const itemName = String(row[startCol + 2] || "").trim();
-        const unitPrice = parseNumber(row[startCol + 3]);
-        const qty = parseNumber(row[startCol + 4]);
-        const total = parseNumber(row[startCol + 5]) || qty * unitPrice;
-
-        if (itemName || total > 0) {
-          expenses.push({
-            category: categoryName,
-            date: formatExcelDate(row[startCol + 1]),
-            name: itemName || "Item Konsumsi",
-            qty: qty || 1,
-            unitPrice,
-            total
-          });
-        }
-      } else {
-        const itemName = String(row[startCol + 2] || "").trim();
-        const qty = parseNumber(row[startCol + 3]);
-        const unitPrice = parseNumber(row[startCol + 4]);
-        const total = parseNumber(row[startCol + 5]) || qty * unitPrice;
-
-        if (itemName || total > 0) {
-          expenses.push({
-            category: categoryName,
-            date: formatExcelDate(row[startCol + 1]),
-            name: itemName || `Item ${categoryName}`,
-            qty: qty || 1,
-            unitPrice,
-            total
-          });
-        }
-      }
     }
   }
 
+  // 2. Deteksi Otomatis 5 Blok Pengeluaran (POSKO, LAIN-LAIN, PROKER, PDD, KONSUMSI)
+  const validCategories = ["POSKO", "LAIN-LAIN", "PROKER", "PDD", "KONSUMSI"];
+
   for (let r = 0; r < rows.length; r++) {
-    const row = rows[r];
+    const row = rows[r] || [];
     for (let c = 0; c < row.length; c++) {
-      const cell = String(row[c] || "").trim().toUpperCase();
-      if (cell === "POSKO" && r + 1 < rows.length) {
-        extractExpenseBlock(r + 1, 7, "POSKO", false, false);
-      } else if (cell === "LAIN-LAIN" && r + 1 < rows.length) {
-        extractExpenseBlock(r + 1, 7, "LAIN-LAIN", false, false);
-      } else if (cell === "PROKER" && r + 1 < rows.length) {
-        extractExpenseBlock(r + 1, 7, "PROKER", false, true);
-      } else if (cell === "PDD" && r + 1 < rows.length) {
-        extractExpenseBlock(r + 1, 14, "PDD", false, false);
-      } else if (cell === "KONSUMSI" && r + 1 < rows.length) {
-        extractExpenseBlock(r + 1, 14, "KONSUMSI", true, false);
+      const title = normText(row[c]);
+      if (!validCategories.includes(title)) continue;
+
+      const headerRow = rows[r + 1] || [];
+      const scanStart = Math.max(0, c - 1);
+      const scanEnd = Math.min(headerRow.length - 1, c + 8);
+
+      let dateCol = -1;
+      let nameCol = -1;
+      let descCol = -1;
+      let qtyCol = -1;
+      let priceCol = -1;
+      let totalCol = -1;
+      let minCol = scanEnd;
+      let maxCol = scanStart;
+
+      for (let k = scanStart; k <= scanEnd; k++) {
+        const h = normText(headerRow[k]);
+        if (!h) continue;
+
+        if (h === "NO" || h.includes("TANGGAL") || h.includes("TGL") ||
+            h.includes("NAMA") || h.includes("BARANG") || h.includes("DESKRIPSI") ||
+            h.includes("URAIAN") || h.includes("JENIS") || h.includes("KET") ||
+            h.includes("JUMLAH") || h.includes("QTY") || h.includes("HARGA") ||
+            h.includes("NOMINAL") || h.includes("TOTAL")) {
+          if (k < minCol) minCol = k;
+          if (k > maxCol) maxCol = k;
+        }
+
+        if (h.includes("TANGGAL") || h.includes("TGL")) {
+          dateCol = k;
+        } else if (
+          h.includes("NAMA") ||
+          h.includes("BARANG") ||
+          h.includes("DESKRIPSI") ||
+          h.includes("URAIAN") ||
+          h.includes("JENIS")
+        ) {
+          if (nameCol === -1) nameCol = k;
+          else descCol = k;
+        } else if (h.includes("KET")) {
+          descCol = k;
+        } else if ((h.includes("JUMLAH") || h.includes("QTY") || h.includes("VOL")) && !h.includes("HARGA")) {
+          qtyCol = k;
+        } else if (h.includes("HARGA") || h.includes("SATUAN")) {
+          priceCol = k;
+        } else if (h.includes("NOMINAL") || h.includes("TOTAL")) {
+          totalCol = k;
+        }
+      }
+
+      if (maxCol < minCol) continue;
+
+      // Baca baris item di bawah header sampai ketemu TOTAL atau judul kategori berikutnya
+      for (let dr = r + 2; dr < rows.length; dr++) {
+        const dRow = rows[dr] || [];
+        let hitBoundary = false;
+
+        for (let k = minCol; k <= maxCol; k++) {
+          const cellVal = normText(dRow[k]);
+          if (
+            cellVal.includes("TOTAL") ||
+            validCategories.includes(cellVal)
+          ) {
+            hitBoundary = true;
+            break;
+          }
+        }
+        if (hitBoundary) break;
+
+        const rawName = nameCol !== -1 ? String(dRow[nameCol] || "").trim() : "";
+        const rawDesc = descCol !== -1 ? String(dRow[descCol] || "").trim() : "";
+        const combinedName =
+          rawName && rawDesc && rawName !== rawDesc
+            ? `${rawName} - ${rawDesc}`
+            : rawName || rawDesc;
+
+        const dateVal = dateCol !== -1 ? formatExcelDate(dRow[dateCol]) : "-";
+        const qtyVal = qtyCol !== -1 ? parseNumber(dRow[qtyCol]) : 0;
+        const priceVal = priceCol !== -1 ? parseNumber(dRow[priceCol]) : 0;
+        const totalVal =
+          totalCol !== -1
+            ? parseNumber(dRow[totalCol])
+            : qtyVal > 0 && priceVal > 0
+            ? qtyVal * priceVal
+            : 0;
+
+        if (combinedName || totalVal > 0) {
+          expenses.push({
+            category: title,
+            date: dateVal,
+            name: combinedName || `Item ${title}`,
+            qty: qtyVal || (totalVal > 0 ? 1 : 0),
+            unitPrice: priceVal,
+            total: totalVal
+          });
+        }
       }
     }
   }
 
   if (members.length === 0 && expenses.length === 0) {
-    throw new Error("Format tabel RAB tidak dikenali pada lembar kerja.");
+    throw new Error("Struktur tabel tidak ditemukan di lembar kerja.");
   }
 
   return {
@@ -310,8 +380,6 @@ async function fetchViaAppsScriptRelay(relayUrl, targetDownloadUrl) {
   if (!response.ok) return null;
   const payload = await response.json();
   if (!payload || !payload.ok || !payload.base64) return null;
-
-  // Pastikan isi Base64 adalah file ZIP/XLSX valid (diawali "UEs" = "PK")
   if (!payload.base64.startsWith("UEs")) return null;
 
   return XLSX.read(payload.base64, { type: "base64" });
@@ -349,7 +417,6 @@ async function syncFromExcelOnline(silent = false) {
   const downloadUrls = getDirectDownloadUrls(appConfig.excelUrl);
   let syncedSuccess = false;
 
-  // Jalur 1 (Paling Stabil): Gunakan Google Apps Script Relay jika sudah diisi
   if (appConfig.relayUrl && appConfig.relayUrl.trim()) {
     for (const dlUrl of downloadUrls) {
       try {
@@ -364,7 +431,6 @@ async function syncFromExcelOnline(silent = false) {
     }
   }
 
-  // Jalur 2 (Cadangan): Coba langsung & proxy publik jika relay belum dipasang
   if (!syncedSuccess) {
     const bust = `_t=${Date.now()}`;
     const candidateFetchUrls = [];
@@ -407,7 +473,7 @@ async function syncFromExcelOnline(silent = false) {
     badge.className = "sync-badge status-offline";
     badgeText.textContent = rabData.members.length > 0 ? "Cache Terakhir" : "Gagal Tarik Excel";
     if (!silent) {
-      showToast("Gagal menarik Excel Online. Pasang URL Jembatan Apps Script di menu Admin.");
+      showToast("Gagal menarik Excel Online. Periksa pengaturan di menu Admin.");
     }
   }
 
