@@ -10,7 +10,7 @@ const DEFAULT_CONFIG = {
   corsMode: "auto",
   kknTitle: "RAB & Kas KKN",
   kknSubtitle: "Laporan Pemasukan & Pengeluaran Realtime",
-  targetIuran: 900000,
+  targetIuran: 1500000,
   logoPath: "main/logo.png",
   ketuaName: "Ketua Kelompok KKN",
   bendaharaName: "Bendahara KKN"
@@ -560,7 +560,7 @@ function renderMembersDetail() {
   const container = document.getElementById("membersDetailContainer");
   const query = (document.getElementById("searchMemberInput").value || "").toLowerCase();
   const statusFilter = document.getElementById("filterMemberStatus").value;
-  const target = Number(appConfig.targetIuran) || 900000;
+  const target = Number(appConfig.targetIuran) || 1500000;
 
   const filtered = rabData.members.filter((m) => {
     const matchName = m.name.toLowerCase().includes(query);
