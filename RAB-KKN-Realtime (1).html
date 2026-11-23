@@ -1,0 +1,2390 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>RAB KKN Realtime Monitor</title>
+  <link rel="manifest" href="manifest.json" />
+  <!-- SheetJS for real-time .xlsx parsing -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <!-- html2pdf.js for direct 1-tap PDF download on Mobile & Desktop -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <style>
+    :root {
+      --bg-primary: #0b1120;
+      --bg-secondary: #111827;
+      --bg-card: #1e293b;
+      --bg-card-hover: #263349;
+      --border-color: rgba(148, 163, 184, 0.14);
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent-emerald: #10b981;
+      --accent-emerald-bg: rgba(16, 185, 129, 0.14);
+      --accent-rose: #f43f5e;
+      --accent-rose-bg: rgba(244, 63, 94, 0.14);
+      --accent-sky: #38bdf8;
+      --accent-sky-bg: rgba(56, 189, 248, 0.14);
+      --accent-amber: #f59e0b;
+      --accent-amber-bg: rgba(245, 158, 11, 0.14);
+      --accent-violet: #a78bfa;
+      --accent-violet-bg: rgba(167, 139, 250, 0.14);
+      --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.35);
+      --radius-lg: 18px;
+      --radius-md: 12px;
+      --radius-sm: 8px;
+      --nav-height: 68px;
+      --sidebar-width: 250px;
+    }
+
+    html.light {
+      --bg-primary: #f1f5f9;
+      --bg-secondary: #ffffff;
+      --bg-card: #ffffff;
+      --bg-card-hover: #f8fafc;
+      --border-color: rgba(15, 23, 42, 0.09);
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #94a3b8;
+      --shadow-lg: 0 8px 24px rgba(15, 23, 42, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      line-height: 1.45;
+      overflow-x: hidden;
+    }
+
+    /* Desktop Sidebar */
+    .desktop-sidebar {
+      display: none;
+    }
+
+    @media (min-width: 900px) {
+      .desktop-sidebar {
+        display: flex;
+        flex-direction: column;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: var(--sidebar-width);
+        height: 100vh;
+        background: var(--bg-secondary);
+        border-right: 1px solid var(--border-color);
+        padding: 24px 16px;
+        z-index: 40;
+      }
+      .main-wrapper {
+        margin-left: var(--sidebar-width);
+        padding-bottom: 32px !important;
+      }
+      .mobile-bottom-nav {
+        display: none !important;
+      }
+    }
+
+    .brand-box {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 8px 24px;
+      border-bottom: 1px solid var(--border-color);
+      margin-bottom: 20px;
+    }
+
+    .brand-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #10b981, #0ea5e9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      color: #fff;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .brand-title {
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: -0.01em;
+    }
+
+    .brand-sub {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .side-nav-btn {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      padding: 12px 14px;
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-bottom: 6px;
+      transition: all 0.18s ease;
+      text-align: left;
+    }
+
+    .side-nav-btn:hover {
+      background: var(--bg-card);
+      color: var(--text-primary);
+    }
+
+    .side-nav-btn.active {
+      background: var(--accent-emerald-bg);
+      color: var(--accent-emerald);
+    }
+
+    .sidebar-footer-actions {
+      margin-top: auto;
+      padding-top: 16px;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* Top Header */
+    .top-header {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      background: rgba(11, 17, 32, 0.85);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--border-color);
+      padding: 12px 16px;
+    }
+
+    html.light .top-header {
+      background: rgba(255, 255, 255, 0.88);
+    }
+
+    .header-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .mobile-logo {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #10b981, #0ea5e9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      color: #fff;
+      font-size: 13px;
+      flex-shrink: 0;
+    }
+
+    @media (min-width: 900px) {
+      .mobile-logo { display: none; }
+    }
+
+    .header-title-wrap {
+      min-width: 0;
+    }
+
+    .header-title {
+      font-size: 15px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .sync-status-line {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .pulse-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent-emerald);
+      box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+      animation: pulse 2s infinite;
+      flex-shrink: 0;
+    }
+
+    .pulse-dot.offline {
+      background: var(--accent-amber);
+      animation: none;
+    }
+
+    .pulse-dot.error {
+      background: var(--accent-rose);
+      animation: none;
+    }
+
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .icon-btn {
+      height: 36px;
+      padding: 0 11px;
+      border-radius: 10px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      color: var(--text-primary);
+      font-size: 12px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: transform 0.12s ease, background 0.15s ease;
+    }
+
+    .icon-btn:active {
+      transform: scale(0.96);
+    }
+
+    .icon-btn.spinning svg {
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      100% { transform: rotate(360deg); }
+    }
+
+    /* Main Content Container */
+    .main-wrapper {
+      padding: 16px 16px calc(var(--nav-height) + 24px);
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    /* Views */
+    .view-section {
+      display: none;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .view-section.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Hero Balance Card */
+    .hero-card {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 55%, #064e3b 100%);
+      border: 1px solid rgba(16, 185, 129, 0.28);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      color: #f8fafc;
+      box-shadow: var(--shadow-lg);
+      margin-bottom: 12px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-card::after {
+      content: "";
+      position: absolute;
+      right: -30px;
+      top: -30px;
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(16,185,129,0.22) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-top-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .hero-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #94a3b8;
+      font-weight: 600;
+    }
+
+    .hero-badge {
+      font-size: 11px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: rgba(16, 185, 129, 0.2);
+      color: #6ee7b7;
+      font-weight: 600;
+    }
+
+    .hero-balance {
+      font-size: clamp(26px, 6vw, 36px);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 14px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .progress-track {
+      width: 100%;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #10b981, #38bdf8);
+      border-radius: 999px;
+      transition: width 0.4s ease;
+    }
+
+    .progress-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: #cbd5e1;
+      margin-bottom: 16px;
+    }
+
+    .kpi-pair {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .kpi-mini {
+      background: rgba(15, 23, 42, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: var(--radius-md);
+      padding: 12px;
+    }
+
+    .kpi-mini-label {
+      font-size: 11px;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      margin-bottom: 4px;
+    }
+
+    .kpi-mini-val {
+      font-size: clamp(15px, 4vw, 19px);
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .val-in { color: #34d399; }
+    .val-out { color: #fb7185; }
+
+    /* Quick Share & Export Action Bar */
+    .quick-export-bar {
+      display: grid;
+      grid-template-columns: 1.3fr 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    @media (max-width: 420px) {
+      .quick-export-bar {
+        grid-template-columns: 1fr 1fr;
+      }
+      .quick-export-bar .btn-wa-copy {
+        grid-column: span 2;
+      }
+    }
+
+    .action-pill-btn {
+      padding: 11px 12px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      color: var(--text-primary);
+      font-size: 12.5px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      cursor: pointer;
+      transition: transform 0.12s ease, border-color 0.15s ease, background 0.15s ease;
+    }
+
+    .action-pill-btn:hover {
+      border-color: var(--accent-emerald);
+    }
+
+    .action-pill-btn:active {
+      transform: scale(0.98);
+    }
+
+    .btn-wa-copy {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: #ffffff;
+      border-color: transparent;
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25);
+    }
+
+    .btn-wa-preview {
+      background: var(--accent-emerald-bg);
+      color: var(--accent-emerald);
+      border-color: rgba(16, 185, 129, 0.3);
+    }
+
+    .btn-pdf-export {
+      background: var(--accent-sky-bg);
+      color: var(--accent-sky);
+      border-color: rgba(56, 189, 248, 0.3);
+    }
+
+    /* Desktop Grid Layout */
+    @media (min-width: 900px) {
+      .overview-grid {
+        display: grid;
+        grid-template-columns: 1.15fr 0.85fr;
+        gap: 18px;
+        align-items: start;
+      }
+    }
+
+    /* Cards & Sections */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      gap: 8px;
+    }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-subtitle {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    /* Category Breakdown List */
+    .cat-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .cat-item {
+      padding: 10px 12px;
+      border-radius: var(--radius-md);
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      cursor: pointer;
+      transition: border-color 0.15s ease;
+    }
+
+    .cat-item:hover {
+      border-color: var(--accent-sky);
+    }
+
+    .cat-row-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .cat-name-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    .cat-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+    }
+
+    .cat-amount {
+      font-weight: 700;
+      font-size: 13px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .cat-bar-bg {
+      height: 6px;
+      background: var(--bg-card);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-bottom: 4px;
+    }
+
+    .cat-bar-fill {
+      height: 100%;
+      border-radius: 999px;
+    }
+
+    .cat-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    /* Search & Filter Controls */
+    .controls-bar {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    @media (min-width: 768px) {
+      .controls-bar {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+      }
+    }
+
+    .search-input-wrap {
+      position: relative;
+      flex: 1;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 10px 14px 10px 36px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      color: var(--text-primary);
+      font-size: 13px;
+      outline: none;
+    }
+
+    .search-input:focus {
+      border-color: var(--accent-emerald);
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    .chips-scroll {
+      display: flex;
+      gap: 7px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      scrollbar-width: none;
+    }
+
+    .chips-scroll::-webkit-scrollbar {
+      display: none;
+    }
+
+    .filter-chip {
+      padding: 7px 13px;
+      border-radius: 999px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .filter-chip.active {
+      background: var(--accent-emerald);
+      color: #fff;
+      border-color: var(--accent-emerald);
+    }
+
+    /* Item Cards (Mobile-Friendly Detailed List) */
+    .items-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+
+    @media (min-width: 768px) {
+      .items-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .item-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 13px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      transition: transform 0.12s ease, border-color 0.15s ease;
+    }
+
+    .item-card:hover {
+      border-color: var(--accent-sky);
+    }
+
+    .item-card:active {
+      transform: scale(0.99);
+    }
+
+    .item-left {
+      display: flex;
+      align-items: flex-start;
+      gap: 11px;
+      min-width: 0;
+    }
+
+    .item-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .item-info {
+      min-width: 0;
+    }
+
+    .item-name {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 3px;
+      word-break: break-word;
+    }
+
+    .item-sub {
+      font-size: 11.5px;
+      color: var(--text-secondary);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .badge-paid { background: var(--accent-emerald-bg); color: var(--accent-emerald); }
+    .badge-unpaid { background: var(--accent-rose-bg); color: var(--accent-rose); }
+    .badge-cat-konsumsi { background: var(--accent-amber-bg); color: var(--accent-amber); }
+    .badge-cat-posko { background: var(--accent-sky-bg); color: var(--accent-sky); }
+    .badge-cat-pdd { background: var(--accent-violet-bg); color: var(--accent-violet); }
+    .badge-cat-lain { background: var(--accent-emerald-bg); color: var(--accent-emerald); }
+    .badge-cat-proker { background: var(--accent-rose-bg); color: var(--accent-rose); }
+
+    .item-right {
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .item-amount {
+      font-size: 14px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .item-unit {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    /* Sync Settings Form */
+    .form-group {
+      margin-bottom: 14px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      color: var(--text-secondary);
+    }
+
+    .form-control {
+      width: 100%;
+      padding: 11px 12px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-color);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-size: 13px;
+      outline: none;
+    }
+
+    .form-control:focus {
+      border-color: var(--accent-emerald);
+    }
+
+    .btn-primary {
+      width: 100%;
+      padding: 12px 16px;
+      border-radius: var(--radius-md);
+      border: none;
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: #fff;
+      font-size: 13.5px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
+    }
+
+    .btn-secondary {
+      width: 100%;
+      padding: 11px 16px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-color);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .steps-box {
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 14px;
+      font-size: 12.5px;
+      color: var(--text-secondary);
+    }
+
+    .steps-box ol {
+      padding-left: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    /* Mobile Bottom Navigation */
+    .mobile-bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: var(--nav-height);
+      background: rgba(17, 24, 39, 0.92);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-top: 1px solid var(--border-color);
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      z-index: 40;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    html.light .mobile-bottom-nav {
+      background: rgba(255, 255, 255, 0.94);
+    }
+
+    .nav-tab {
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      font-size: 10.5px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .nav-tab.active {
+      color: var(--accent-emerald);
+    }
+
+    /* Bottom Sheet Modal (Detail Inspector & WA Preview) */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      z-index: 60;
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+    }
+
+    @media (min-width: 768px) {
+      .modal-backdrop {
+        align-items: center;
+      }
+    }
+
+    .modal-backdrop.open {
+      display: flex;
+    }
+
+    .bottom-sheet {
+      width: 100%;
+      max-width: 520px;
+      background: var(--bg-secondary);
+      border-top-left-radius: 22px;
+      border-top-right-radius: 22px;
+      border: 1px solid var(--border-color);
+      padding: 16px 20px 28px;
+      animation: slideUp 0.22s ease;
+      max-height: 88vh;
+      overflow-y: auto;
+    }
+
+    @media (min-width: 768px) {
+      .bottom-sheet {
+        border-radius: 20px;
+      }
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(30px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .sheet-handle {
+      width: 40px;
+      height: 4px;
+      border-radius: 999px;
+      background: var(--text-muted);
+      opacity: 0.4;
+      margin: 0 auto 14px;
+    }
+
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 13px;
+    }
+
+    .detail-row:last-child {
+      border-bottom: none;
+    }
+
+    .detail-key {
+      color: var(--text-secondary);
+    }
+
+    .detail-val {
+      font-weight: 700;
+      text-align: right;
+    }
+
+    /* WhatsApp Preview Textarea */
+    .wa-preview-box {
+      width: 100%;
+      min-height: 250px;
+      padding: 12px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-color);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      resize: vertical;
+      margin-bottom: 12px;
+      outline: none;
+    }
+
+    .wa-modal-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    /* Toast Notification */
+    .toast {
+      position: fixed;
+      top: 70px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-16px);
+      background: #1e293b;
+      color: #f8fafc;
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      padding: 9px 16px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      box-shadow: var(--shadow-lg);
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.25s ease;
+      z-index: 80;
+      white-space: nowrap;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 32px 16px;
+      color: var(--text-secondary);
+      font-size: 13px;
+    }
+
+    /* Hidden Offscreen Formal PDF Report Template */
+    #pdfStagingWrapper {
+      position: fixed;
+      left: -9999px;
+      top: 0;
+      width: 794px; /* A4 width at 96 DPI */
+      background: #ffffff;
+      color: #0f172a;
+      z-index: -1;
+    }
+
+    .pdf-sheet {
+      padding: 32px 36px;
+      font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #0f172a;
+      background: #ffffff;
+    }
+
+    .pdf-header {
+      border-bottom: 2.5px solid #0f172a;
+      padding-bottom: 14px;
+      margin-bottom: 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+
+    .pdf-title {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: #0f172a;
+    }
+
+    .pdf-subtitle {
+      font-size: 11px;
+      color: #475569;
+      margin-top: 3px;
+    }
+
+    .pdf-meta-right {
+      text-align: right;
+      font-size: 10.5px;
+      color: #475569;
+    }
+
+    .pdf-kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .pdf-kpi-box {
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: #f8fafc;
+    }
+
+    .pdf-kpi-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: #64748b;
+    }
+
+    .pdf-kpi-value {
+      font-size: 16px;
+      font-weight: 800;
+      margin-top: 3px;
+      color: #0f172a;
+    }
+
+    .pdf-section-title {
+      font-size: 13px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #0f172a;
+      margin: 16px 0 8px;
+      padding-left: 8px;
+      border-left: 3.5px solid #10b981;
+    }
+
+    .pdf-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+      margin-bottom: 14px;
+    }
+
+    .pdf-table th {
+      background: #0f172a;
+      color: #ffffff;
+      font-weight: 700;
+      text-align: left;
+      padding: 7px 9px;
+      border: 1px solid #0f172a;
+    }
+
+    .pdf-table td {
+      padding: 6px 9px;
+      border: 1px solid #cbd5e1;
+      color: #1e293b;
+    }
+
+    .pdf-table tr:nth-child(even) td {
+      background: #f8fafc;
+    }
+
+    .pdf-table tr.pdf-total-row td {
+      background: #e2e8f0;
+      font-weight: 800;
+      color: #0f172a;
+    }
+
+    .text-right {
+      text-align: right !important;
+    }
+
+    .text-center {
+      text-align: center !important;
+    }
+
+    .pdf-footer {
+      margin-top: 20px;
+      padding-top: 10px;
+      border-top: 1px solid #cbd5e1;
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: #64748b;
+    }
+
+    /* Native Browser Print Fallback (@media print) */
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      #pdfStagingWrapper, #pdfStagingWrapper * {
+        visibility: visible;
+      }
+      #pdfStagingWrapper {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        z-index: 9999;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Desktop Left Sidebar -->
+  <aside class="desktop-sidebar">
+    <div class="brand-box">
+      <div class="brand-icon">RAB</div>
+      <div>
+        <div class="brand-title">RAB KKN Live</div>
+        <div class="brand-sub">Excel Online Sync</div>
+      </div>
+    </div>
+    <button class="side-nav-btn active" data-tab="overview" onclick="switchTab('overview')">
+      <span>📊</span> Ringkasan Kas
+    </button>
+    <button class="side-nav-btn" data-tab="income" onclick="switchTab('income')">
+      <span>💰</span> Pemasukan Anggota
+    </button>
+    <button class="side-nav-btn" data-tab="expenses" onclick="switchTab('expenses')">
+      <span>🧾</span> Rincian Pengeluaran
+    </button>
+    <button class="side-nav-btn" data-tab="sync" onclick="switchTab('sync')">
+      <span>🔄</span> Koneksi Excel Online
+    </button>
+
+    <div class="sidebar-footer-actions">
+      <button class="action-pill-btn btn-wa-copy" onclick="copyWhatsAppReport()">
+        <span>📋</span> Salin Laporan WA
+      </button>
+      <button class="action-pill-btn btn-pdf-export" onclick="exportToPDF()">
+        <span>📄</span> Ekspor Ringkasan PDF
+      </button>
+    </div>
+  </aside>
+
+  <!-- Sticky Top Header -->
+  <header class="top-header">
+    <div class="header-inner">
+      <div class="header-left">
+        <div class="mobile-logo">RAB</div>
+        <div class="header-title-wrap">
+          <div class="header-title" id="docTitle">RAB KKN.xlsx</div>
+          <div class="sync-status-line">
+            <span class="pulse-dot" id="syncDot"></span>
+            <span id="syncStatusText">Snapshot Terkini • Siap Sinkron</span>
+          </div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="icon-btn" id="btnRefresh" onclick="syncNow(true)" title="Sinkronkan Sekarang">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+          <span>Sync</span>
+        </button>
+        <button class="icon-btn" onclick="toggleTheme()" title="Ganti Tema">🌓</button>
+      </div>
+    </div>
+  </header>
+
+  <div id="toast" class="toast">Data tersinkronisasi</div>
+
+  <!-- Main Content -->
+  <main class="main-wrapper">
+    <div class="container">
+
+      <!-- TAB 1: RINGKASAN -->
+      <section id="view-overview" class="view-section active">
+        <div class="hero-card">
+          <div class="hero-top-row">
+            <span class="hero-label">Sisa Saldo Kas KKN</span>
+            <span class="hero-badge" id="heroBadgePct">57.9% Tersisa</span>
+          </div>
+          <div class="hero-balance" id="heroBalance">Rp 3.070.000</div>
+          <div class="progress-track">
+            <div class="progress-fill" id="heroProgress" style="width: 42.1%;"></div>
+          </div>
+          <div class="progress-meta">
+            <span id="heroSpentRatio">Terpakai: 42.1% dari pemasukan</span>
+            <span id="heroMemberPaid">7/10 Anggota Bayar</span>
+          </div>
+          <div class="kpi-pair">
+            <div class="kpi-mini" onclick="switchTab('income')" style="cursor:pointer;">
+              <div class="kpi-mini-label">▲ Total Pemasukan</div>
+              <div class="kpi-mini-val val-in" id="kpiTotalIn">Rp 5.300.000</div>
+            </div>
+            <div class="kpi-mini" onclick="switchTab('expenses')" style="cursor:pointer;">
+              <div class="kpi-mini-label">▼ Total Pengeluaran</div>
+              <div class="kpi-mini-val val-out" id="kpiTotalOut">Rp 2.230.000</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Actions: Salin Laporan WA, Pratinjau WA, & Ekspor PDF -->
+        <div class="quick-export-bar">
+          <button class="action-pill-btn btn-wa-copy" onclick="copyWhatsAppReport()">
+            <span>📋</span> Salin Laporan WA
+          </button>
+          <button class="action-pill-btn btn-wa-preview" onclick="openWhatsAppPreview()">
+            <span>💬</span> Pratinjau WA
+          </button>
+          <button class="action-pill-btn btn-pdf-export" id="btnExportPdf" onclick="exportToPDF()">
+            <span>📄</span> Ekspor PDF
+          </button>
+        </div>
+
+        <div class="overview-grid">
+          <!-- Alokasi & Realisasi per Pos RAB -->
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">📌 Rekap Jenis RAB</div>
+                <div class="card-subtitle">Tap kategori untuk melihat rincian item</div>
+              </div>
+            </div>
+            <div class="cat-list" id="categoryBreakdownList"></div>
+          </div>
+
+          <!-- Item Pengeluaran Terbaru & Status Iuran -->
+          <div>
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">🧾 Pengeluaran Tercatat</div>
+                <button class="filter-chip" onclick="switchTab('expenses')">Lihat Semua</button>
+              </div>
+              <div class="items-grid" style="grid-template-columns:1fr;" id="recentExpensesList"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: PEMASUKAN ANGGOTA -->
+      <section id="view-income" class="view-section">
+        <div class="card" style="padding:14px 16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <span style="font-size:13px;font-weight:700;">Progres Iuran Anggota</span>
+            <span style="font-size:13px;font-weight:800;color:var(--accent-emerald);" id="incomeSummaryHeader">Rp 5.300.000</span>
+          </div>
+          <div class="progress-track" style="background:var(--bg-primary);margin-bottom:6px;">
+            <div class="progress-fill" id="memberProgressBar" style="width:70%;"></div>
+          </div>
+          <div style="font-size:11.5px;color:var(--text-secondary);" id="memberStatsLine">
+            7 anggota sudah menyetor • 3 anggota belum menyetor
+          </div>
+        </div>
+
+        <div class="controls-bar">
+          <div class="search-input-wrap">
+            <span class="search-icon">🔍</span>
+            <input type="text" class="search-input" id="memberSearchInput" placeholder="Cari nama anggota..." oninput="renderMembers()" />
+          </div>
+          <div class="chips-scroll">
+            <button class="filter-chip active" data-mfilter="all" onclick="setMemberFilter('all', this)">Semua (10)</button>
+            <button class="filter-chip" data-mfilter="paid" onclick="setMemberFilter('paid', this)">Sudah Bayar</button>
+            <button class="filter-chip" data-mfilter="unpaid" onclick="setMemberFilter('unpaid', this)">Belum Bayar</button>
+          </div>
+        </div>
+
+        <div class="items-grid" id="membersList"></div>
+      </section>
+
+      <!-- TAB 3: RINCIAN PENGELUARAN -->
+      <section id="view-expenses" class="view-section">
+        <div class="controls-bar">
+          <div class="search-input-wrap">
+            <span class="search-icon">🔍</span>
+            <input type="text" class="search-input" id="expenseSearchInput" placeholder="Cari barang, keterangan, tanggal..." oninput="renderExpenses()" />
+          </div>
+          <div class="chips-scroll" id="expenseCategoryChips">
+            <button class="filter-chip active" onclick="setExpenseCat('ALL', this)">Semua</button>
+            <button class="filter-chip" onclick="setExpenseCat('KONSUMSI', this)">Konsumsi</button>
+            <button class="filter-chip" onclick="setExpenseCat('POSKO', this)">Posko</button>
+            <button class="filter-chip" onclick="setExpenseCat('PDD', this)">PDD</button>
+            <button class="filter-chip" onclick="setExpenseCat('LAIN-LAIN', this)">Lain-Lain</button>
+            <button class="filter-chip" onclick="setExpenseCat('PROKER', this)">Proker</button>
+          </div>
+        </div>
+
+        <div class="card" style="padding:12px 16px;display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:12.5px;color:var(--text-secondary);" id="expenseFilterCount">Menampilkan 4 item</span>
+          <span style="font-size:14px;font-weight:800;color:var(--accent-rose);" id="expenseFilterTotal">Rp 2.230.000</span>
+        </div>
+
+        <div class="items-grid" id="expensesList"></div>
+      </section>
+
+      <!-- TAB 4: PENGATURAN SINKRONISASI EXCEL ONLINE -->
+      <section id="view-sync" class="view-section">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">☁️ Sinkronisasi Real-Time OneDrive Excel Online</div>
+              <div class="card-subtitle">Terhubung langsung ke file RAB KKN.xlsx di internet</div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Tautan Share OneDrive Excel Online (1drv.ms / onedrive.live.com)</label>
+            <input type="url" class="form-control" id="onedriveUrlInput" placeholder="https://1drv.ms/x/c/..." />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Interval Auto-Refresh Real-Time</label>
+            <select class="form-control" id="pollIntervalSelect" onchange="updatePollingInterval()">
+              <option value="10000">Setiap 10 Detik (Live)</option>
+              <option value="30000" selected>Setiap 30 Detik (Disarankan)</option>
+              <option value="60000">Setiap 1 Menit</option>
+              <option value="300000">Setiap 5 Menit</option>
+              <option value="0">Manual Saja</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Server Relay / CORS Proxy (Opsional — Otomatis Aktif jika pakai server.js)</label>
+            <input type="text" class="form-control" id="proxyUrlInput" placeholder="Kosongkan untuk direct OneDrive API, atau isi /api/excel?url=" />
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+            <button class="btn-primary" onclick="saveAndSync()">Simpan &amp; Sinkronkan</button>
+            <label class="btn-secondary" style="cursor:pointer;">
+              📂 Buka File .xlsx Lokal
+              <input type="file" accept=".xlsx,.xls" style="display:none;" onchange="handleLocalFile(event)" />
+            </label>
+          </div>
+
+          <div class="steps-box">
+            <strong>Cara agar Excel Online selalu sinkron otomatis:</strong>
+            <ol>
+              <li>Buka <strong>RAB KKN.xlsx</strong> di Excel Online (OneDrive).</li>
+              <li>Klik tombol <strong>Share (Bagikan)</strong> di pojok kanan atas → pilih <strong>Copy link (Salin tautan)</strong> dengan akses <em>"Anyone with the link can view"</em>.</li>
+              <li>Tempel tautan tersebut pada kolom di atas lalu tekan <strong>Simpan &amp; Sinkronkan</strong>.</li>
+              <li>Setiap kali bendahara mengedit angka di Excel Online (HP atau Laptop), aplikasi ini otomatis membaca pembaruannya!</li>
+            </ol>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- Mobile Bottom Navigation -->
+  <nav class="mobile-bottom-nav">
+    <button class="nav-tab active" data-tab="overview" onclick="switchTab('overview')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>
+      <span>Ringkasan</span>
+    </button>
+    <button class="nav-tab" data-tab="income" onclick="switchTab('income')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      <span>Pemasukan</span>
+    </button>
+    <button class="nav-tab" data-tab="expenses" onclick="switchTab('expenses')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      <span>Pengeluaran</span>
+    </button>
+    <button class="nav-tab" data-tab="sync" onclick="switchTab('sync')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+      <span>Sinkronisasi</span>
+    </button>
+  </nav>
+
+  <!-- Detail Inspector Bottom Sheet -->
+  <div class="modal-backdrop" id="detailModal" onclick="closeModal(event, 'detailModal')">
+    <div class="bottom-sheet" onclick="event.stopPropagation()">
+      <div class="sheet-handle"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <h3 style="font-size:16px;font-weight:800;" id="modalTitle">Detail Item</h3>
+        <button class="icon-btn" onclick="document.getElementById('detailModal').classList.remove('open')">✕</button>
+      </div>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <!-- WhatsApp Report Preview Bottom Sheet -->
+  <div class="modal-backdrop" id="waModal" onclick="closeModal(event, 'waModal')">
+    <div class="bottom-sheet" onclick="event.stopPropagation()">
+      <div class="sheet-handle"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div>
+          <h3 style="font-size:16px;font-weight:800;">💬 Laporan Kas Grup WhatsApp</h3>
+          <div style="font-size:11.5px;color:var(--text-secondary);">Format otomatis siap tempel ke grup KKN</div>
+        </div>
+        <button class="icon-btn" onclick="document.getElementById('waModal').classList.remove('open')">✕</button>
+      </div>
+      <textarea class="wa-preview-box" id="waReportTextarea" readonly></textarea>
+      <div class="wa-modal-actions">
+        <button class="btn-primary" onclick="copyFromTextarea()">📋 Salin Teks</button>
+        <button class="btn-secondary" onclick="sendDirectlyToWhatsApp()">🚀 Buka WhatsApp</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Offscreen Formal A4 Report Container for PDF Export -->
+  <div id="pdfStagingWrapper"></div>
+
+  <script>
+    // Preloaded exact snapshot from RAB KKN.xlsx
+    const INITIAL_DATA = {
+      sheetName: "LAPORAN PEMASUKAN DAN PENGELUAR",
+      lastSync: "Snapshot Awal (RAB KKN.xlsx)",
+      members: [
+        { no: 1, nama: "AHMAD DANI SARKAWI", total: 500000, cell: "E6" },
+        { no: 2, nama: "IDA AYU PUTU MAHESWARI", total: 0, cell: "E7" },
+        { no: 3, nama: "ULUL AJMI MAWARTI", total: 0, cell: "E8" },
+        { no: 4, nama: "AHMAD DZULAL FAZA AZMAN", total: 1500000, cell: "E9" },
+        { no: 5, nama: "SYAFTA EKA PUTRA", total: 0, cell: "E10" },
+        { no: 6, nama: "FISA FAJRIYAH RAHMAN", total: 900000, cell: "E11" },
+        { no: 7, nama: "HAULA PURRASADA", total: 300000, cell: "E12" },
+        { no: 8, nama: "ALIYAH ROFIFAH ALKATIRI", total: 900000, cell: "E13" },
+        { no: 9, nama: "MAYA MARTANIATI", total: 300000, cell: "E14" },
+        { no: 10, nama: "I MD ANDIKA PUTRA WIJAYA", total: 900000, cell: "E15" }
+      ],
+      expenses: [
+        { no: 1, category: "LAIN-LAIN", tanggal: "-", nama: "PDH", qty: 10, hargaSatuan: 0, nominal: 0, cell: "I25:M25" },
+        { no: 2, category: "LAIN-LAIN", tanggal: "-", nama: "Kaos", qty: 10, hargaSatuan: 0, nominal: 0, cell: "I26:M26" },
+        { no: 3, category: "LAIN-LAIN", tanggal: "-", nama: "Lanyear", qty: 10, hargaSatuan: 0, nominal: 0, cell: "I27:M27" },
+        { no: 4, category: "LAIN-LAIN", tanggal: "-", nama: "Id Card", qty: 10, hargaSatuan: 223000, nominal: 2230000, cell: "I28:M28" }
+      ],
+      categoryTotals: {
+        "KONSUMSI": 0,
+        "POSKO": 0,
+        "PDD": 0,
+        "LAIN-LAIN": 2230000,
+        "PROKER": 0
+      }
+    };
+
+    let appData = JSON.parse(localStorage.getItem("rab_kkn_cache")) || INITIAL_DATA;
+    let memberFilter = "all";
+    let expenseCatFilter = "ALL";
+    let pollTimer = null;
+
+    const DEFAULT_ONEDRIVE_URL = "https://1drv.ms/x/c/0a4873d3eb635f62/IQAxUwzNi4F6T6fH2heV9QpjAbR2TKqf3GP3fLmR2kK50kc?e=GMcqhA";
+
+    function formatRp(num) {
+      const n = Number(num) || 0;
+      return "Rp " + n.toLocaleString("id-ID");
+    }
+
+    function parseNum(val) {
+      if (typeof val === "number") return val;
+      if (!val) return 0;
+      const cleaned = String(val).replace(/[^0-9.-]/g, "");
+      return parseFloat(cleaned) || 0;
+    }
+
+    function showToast(msg) {
+      const el = document.getElementById("toast");
+      el.textContent = msg;
+      el.classList.add("show");
+      setTimeout(() => el.classList.remove("show"), 2600);
+    }
+
+    function toggleTheme() {
+      document.documentElement.classList.toggle("light");
+      localStorage.setItem("rab_theme", document.documentElement.classList.contains("light") ? "light" : "dark");
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll(".view-section").forEach(s => s.classList.remove("active"));
+      document.getElementById("view-" + tabId).classList.add("active");
+
+      document.querySelectorAll(".nav-tab, .side-nav-btn").forEach(btn => {
+        btn.classList.toggle("active", btn.dataset.tab === tabId);
+      });
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function setMemberFilter(filter, btn) {
+      memberFilter = filter;
+      document.querySelectorAll("[data-mfilter]").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      renderMembers();
+    }
+
+    function setExpenseCat(cat, btn) {
+      expenseCatFilter = cat;
+      document.querySelectorAll("#expenseCategoryChips .filter-chip").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      renderExpenses();
+    }
+
+    function openDetailModal(title, rows) {
+      document.getElementById("modalTitle").textContent = title;
+      document.getElementById("modalBody").innerHTML = rows.map(r => `
+        <div class="detail-row">
+          <span class="detail-key">${r.k}</span>
+          <span class="detail-val">${r.v}</span>
+        </div>
+      `).join("");
+      document.getElementById("detailModal").classList.add("open");
+    }
+
+    function closeModal(e, modalId) {
+      if (e.target.id === modalId) {
+        document.getElementById(modalId).classList.remove("open");
+      }
+    }
+
+    function getComputedMetrics() {
+      const totalIn = appData.members.reduce((sum, m) => sum + (Number(m.total) || 0), 0);
+      const catValues = Object.values(appData.categoryTotals);
+      const sumFromCats = catValues.reduce((a, b) => a + (Number(b) || 0), 0);
+      const sumFromItems = appData.expenses.reduce((sum, item) => sum + (Number(item.nominal) || 0), 0);
+      const totalOut = Math.max(sumFromCats, sumFromItems);
+      const balance = totalIn - totalOut;
+      const spentPct = totalIn > 0 ? Math.min(100, (totalOut / totalIn) * 100) : 0;
+      const remainPct = totalIn > 0 ? Math.max(0, 100 - spentPct) : 0;
+      const paidMembers = appData.members.filter(m => (Number(m.total) || 0) > 0);
+      const unpaidMembers = appData.members.filter(m => (Number(m.total) || 0) <= 0);
+      return { totalIn, totalOut, balance, spentPct, remainPct, paidMembers, unpaidMembers };
+    }
+
+    // ==========================================
+    // FITUR 1: LAPORAN KAS OTOMATIS GRUP WHATSAPP
+    // ==========================================
+    function generateWhatsAppText() {
+      const { totalIn, totalOut, balance, spentPct, paidMembers, unpaidMembers } = getComputedMetrics();
+      const now = new Date();
+      const dateLabel = now.toLocaleDateString("id-ID", {
+        weekday: "long", day: "numeric", month: "long", year: "numeric"
+      });
+      const timeLabel = now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+
+      const catOrder = [
+        { key: "KONSUMSI", label: "Konsumsi" },
+        { key: "POSKO", label: "Posko" },
+        { key: "PDD", label: "PDD" },
+        { key: "LAIN-LAIN", label: "Lain-Lain" },
+        { key: "PROKER", label: "Proker" }
+      ];
+
+      const catLines = catOrder.map(c => {
+        const val = Number(appData.categoryTotals[c.key]) || 0;
+        return `• ${c.label}: ${formatRp(val)}`;
+      }).join("\n");
+
+      const activeExpenses = appData.expenses.filter(e => (Number(e.nominal) || 0) > 0 || e.nama);
+      const expenseLines = activeExpenses.length
+        ? activeExpenses.map((item, idx) => {
+            const qtyInfo = item.qty && item.hargaSatuan
+              ? ` (${item.qty}x @${formatRp(item.hargaSatuan)})`
+              : "";
+            return `${idx + 1}. [${item.category}] ${item.nama}${qtyInfo}: *${formatRp(item.nominal)}*`;
+          }).join("\n")
+        : "• Belum ada rincian pengeluaran.";
+
+      const paidLines = paidMembers.length
+        ? paidMembers.map(m => `✅ ${m.nama} (${formatRp(m.total)})`).join("\n")
+        : "• Belum ada";
+
+      const unpaidLines = unpaidMembers.length
+        ? unpaidMembers.map(m => `⏳ ${m.nama}`).join("\n")
+        : "• Semua anggota sudah lunas! 🎉";
+
+      return `*📊 LAPORAN UPDATE KAS & RAB KKN*
+_${dateLabel} • Pukul ${timeLabel} WITA_
+Sumber: *RAB KKN.xlsx* (${appData.lastSync})
+
+*RINGKASAN SALDO KAS*
+💰 Total Pemasukan : *${formatRp(totalIn)}*
+💸 Total Pengeluaran : *${formatRp(totalOut)}* (${spentPct.toFixed(1)}%)
+🏦 *Sisa Saldo Kas : ${formatRp(balance)}*
+
+*REKAP PENGELUARAN PER POS RAB*
+${catLines}
+
+*RINCIAN ITEM PENGELUARAN*
+${expenseLines}
+
+*STATUS IURAN ANGGOTA (${paidMembers.length}/${appData.members.length} Sudah Setor)*
+${paidLines}
+
+*BELUM SETOR IURAN (${unpaidMembers.length} Orang)*
+${unpaidLines}
+
+_Pesan dibuat otomatis melalui RAB KKN Realtime Monitor._`;
+    }
+
+    async function copyTextToClipboard(text) {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    }
+
+    async function copyWhatsAppReport() {
+      const reportText = generateWhatsAppText();
+      try {
+        await copyTextToClipboard(reportText);
+        showToast("✅ Laporan kas WA disalin! Siap ditempel ke grup.");
+      } catch (err) {
+        openWhatsAppPreview();
+        showToast("Silakan salin teks laporan dari pratinjau.");
+      }
+    }
+
+    function openWhatsAppPreview() {
+      const reportText = generateWhatsAppText();
+      document.getElementById("waReportTextarea").value = reportText;
+      document.getElementById("waModal").classList.add("open");
+    }
+
+    async function copyFromTextarea() {
+      const text = document.getElementById("waReportTextarea").value;
+      await copyTextToClipboard(text);
+      showToast("✅ Teks laporan WA berhasil disalin!");
+    }
+
+    function sendDirectlyToWhatsApp() {
+      const text = document.getElementById("waReportTextarea").value || generateWhatsAppText();
+      const waUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
+      window.open(waUrl, "_blank", "noopener,noreferrer");
+    }
+
+    // ==========================================
+    // FITUR 2: EKSPOR RINGKASAN RAB KE PDF
+    // ==========================================
+    function buildPdfReportHTML() {
+      const { totalIn, totalOut, balance, spentPct, paidMembers } = getComputedMetrics();
+      const now = new Date();
+      const printDate = now.toLocaleDateString("id-ID", {
+        day: "numeric", month: "long", year: "numeric"
+      }) + " " + now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+
+      const catOrder = [
+        { key: "KONSUMSI", label: "Konsumsi" },
+        { key: "POSKO", label: "Posko" },
+        { key: "PDD", label: "PDD" },
+        { key: "LAIN-LAIN", label: "Lain-Lain" },
+        { key: "PROKER", label: "Proker" }
+      ];
+
+      const catRowsHTML = catOrder.map((c, idx) => {
+        const val = Number(appData.categoryTotals[c.key]) || 0;
+        const pct = totalOut > 0 ? ((val / totalOut) * 100).toFixed(1) + "%" : "0.0%";
+        const itemCount = appData.expenses.filter(x => x.category === c.key).length;
+        return `
+          <tr>
+            <td class="text-center">${idx + 1}</td>
+            <td><strong>${c.label}</strong></td>
+            <td class="text-center">${itemCount} item</td>
+            <td class="text-right">${pct}</td>
+            <td class="text-right">${formatRp(val)}</td>
+          </tr>
+        `;
+      }).join("");
+
+      const expenseRowsHTML = appData.expenses.length
+        ? appData.expenses.map((item, idx) => `
+            <tr>
+              <td class="text-center">${idx + 1}</td>
+              <td>${item.category}</td>
+              <td class="text-center">${item.tanggal || "-"}</td>
+              <td>${item.nama}</td>
+              <td class="text-center">${item.qty || "-"}</td>
+              <td class="text-right">${item.hargaSatuan ? formatRp(item.hargaSatuan) : "-"}</td>
+              <td class="text-right"><strong>${formatRp(item.nominal)}</strong></td>
+            </tr>
+          `).join("")
+        : `<tr><td colspan="7" class="text-center">Belum ada item pengeluaran tercatat.</td></tr>`;
+
+      const memberRowsHTML = appData.members.map((m, idx) => {
+        const isPaid = (Number(m.total) || 0) > 0;
+        const share = totalIn > 0 ? (((Number(m.total) || 0) / totalIn) * 100).toFixed(1) + "%" : "0.0%";
+        return `
+          <tr>
+            <td class="text-center">${idx + 1}</td>
+            <td>${m.nama}</td>
+            <td class="text-center">${isPaid ? "Sudah Setor" : "Belum Setor"}</td>
+            <td class="text-right">${share}</td>
+            <td class="text-right"><strong>${formatRp(m.total)}</strong></td>
+          </tr>
+        `;
+      }).join("");
+
+      return `
+        <div class="pdf-sheet" id="pdfDocumentRoot">
+          <div class="pdf-header">
+            <div>
+              <div class="pdf-title">RINGKASAN LAPORAN KAS &amp; RAB KKN</div>
+              <div class="pdf-subtitle">File Sumber: RAB KKN.xlsx • Sheet: ${appData.sheetName}</div>
+            </div>
+            <div class="pdf-meta-right">
+              <div><strong>Dicetak:</strong> ${printDate} WITA</div>
+              <div><strong>Status Sync:</strong> ${appData.lastSync}</div>
+            </div>
+          </div>
+
+          <div class="pdf-kpi-grid">
+            <div class="pdf-kpi-box">
+              <div class="pdf-kpi-label">Total Pemasukan (${paidMembers.length}/${appData.members.length} Anggota)</div>
+              <div class="pdf-kpi-value" style="color:#059669;">${formatRp(totalIn)}</div>
+            </div>
+            <div class="pdf-kpi-box">
+              <div class="pdf-kpi-label">Total Pengeluaran (${spentPct.toFixed(1)}%)</div>
+              <div class="pdf-kpi-value" style="color:#e11d48;">${formatRp(totalOut)}</div>
+            </div>
+            <div class="pdf-kpi-box">
+              <div class="pdf-kpi-label">Sisa Saldo Kas Saat Ini</div>
+              <div class="pdf-kpi-value" style="color:#0284c7;">${formatRp(balance)}</div>
+            </div>
+          </div>
+
+          <div class="pdf-section-title">1. Rekapitulasi Pengeluaran per Pos RAB</div>
+          <table class="pdf-table">
+            <thead>
+              <tr>
+                <th style="width:36px;" class="text-center">No</th>
+                <th>Kategori Pos RAB</th>
+                <th style="width:90px;" class="text-center">Jumlah Item</th>
+                <th style="width:85px;" class="text-right">Porsi</th>
+                <th style="width:140px;" class="text-right">Total Nominal</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${catRowsHTML}
+              <tr class="pdf-total-row">
+                <td colspan="4" class="text-right">TOTAL PENGELUARAN KESELURUHAN</td>
+                <td class="text-right">${formatRp(totalOut)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="pdf-section-title">2. Rincian Item Pengeluaran</div>
+          <table class="pdf-table">
+            <thead>
+              <tr>
+                <th style="width:36px;" class="text-center">No</th>
+                <th style="width:95px;">Kategori</th>
+                <th style="width:75px;" class="text-center">Tanggal</th>
+                <th>Uraian Barang / Kegiatan</th>
+                <th style="width:50px;" class="text-center">Qty</th>
+                <th style="width:110px;" class="text-right">Harga Satuan</th>
+                <th style="width:120px;" class="text-right">Nominal</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${expenseRowsHTML}
+              <tr class="pdf-total-row">
+                <td colspan="6" class="text-right">TOTAL RINCIAN PENGELUARAN</td>
+                <td class="text-right">${formatRp(totalOut)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="pdf-section-title">3. Rincian Pemasukan &amp; Iuran Anggota</div>
+          <table class="pdf-table">
+            <thead>
+              <tr>
+                <th style="width:36px;" class="text-center">No</th>
+                <th>Nama Anggota</th>
+                <th style="width:105px;" class="text-center">Status</th>
+                <th style="width:85px;" class="text-right">Kontribusi</th>
+                <th style="width:130px;" class="text-right">Total Setoran</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${memberRowsHTML}
+              <tr class="pdf-total-row">
+                <td colspan="4" class="text-right">TOTAL PEMASUKAN ANGGOTA</td>
+                <td class="text-right">${formatRp(totalIn)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="pdf-footer">
+            <span>RAB KKN Realtime Monitor • Sinkronisasi Excel Online</span>
+            <span>Sisa Saldo Akhir: ${formatRp(balance)}</span>
+          </div>
+        </div>
+      `;
+    }
+
+    async function exportToPDF() {
+      const btn = document.getElementById("btnExportPdf");
+      if (btn) btn.textContent = "⏳ Membuat PDF...";
+      showToast("⏳ Menyiapkan dokumen PDF...");
+
+      const staging = document.getElementById("pdfStagingWrapper");
+      staging.innerHTML = buildPdfReportHTML();
+      const targetEl = document.getElementById("pdfDocumentRoot");
+
+      const dateSlug = new Date().toISOString().slice(0, 10);
+      const filename = `Ringkasan-RAB-KKN-${dateSlug}.pdf`;
+
+      try {
+        if (typeof html2pdf !== "undefined") {
+          const opt = {
+            margin: [6, 6, 6, 6],
+            filename: filename,
+            image: { type: "jpeg", quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" },
+            jsPDF: { unit: "mm", format: "a4", orientation: "portrait" }
+          };
+          await html2pdf().set(opt).from(targetEl).save();
+          showToast("✅ File PDF berhasil diunduh!");
+        } else {
+          window.print();
+        }
+      } catch (err) {
+        window.print();
+      } finally {
+        if (btn) btn.innerHTML = `<span>📄</span> Ekspor PDF`;
+      }
+    }
+
+    function renderAll() {
+      const { totalIn, totalOut, balance, spentPct, remainPct, paidMembers } = getComputedMetrics();
+
+      document.getElementById("heroBalance").textContent = formatRp(balance);
+      document.getElementById("heroBadgePct").textContent = `${remainPct.toFixed(1)}% Tersisa`;
+      document.getElementById("heroProgress").style.width = `${spentPct.toFixed(1)}%`;
+      document.getElementById("heroSpentRatio").textContent = `Terpakai: ${spentPct.toFixed(1)}% dari pemasukan`;
+
+      const paidCount = paidMembers.length;
+      const totalMembers = appData.members.length;
+      document.getElementById("heroMemberPaid").textContent = `${paidCount}/${totalMembers} Anggota Bayar`;
+
+      document.getElementById("kpiTotalIn").textContent = formatRp(totalIn);
+      document.getElementById("kpiTotalOut").textContent = formatRp(totalOut);
+
+      // Render Category Breakdown
+      const catMeta = [
+        { key: "KONSUMSI", label: "Konsumsi", color: "#f59e0b" },
+        { key: "POSKO", label: "Posko", color: "#38bdf8" },
+        { key: "PDD", label: "PDD", color: "#a78bfa" },
+        { key: "LAIN-LAIN", label: "Lain-Lain", color: "#10b981" },
+        { key: "PROKER", label: "Proker", color: "#f43f5e" }
+      ];
+
+      document.getElementById("categoryBreakdownList").innerHTML = catMeta.map(c => {
+        const val = Number(appData.categoryTotals[c.key]) || 0;
+        const pct = totalOut > 0 ? (val / totalOut) * 100 : 0;
+        const count = appData.expenses.filter(x => x.category === c.key).length;
+        return `
+          <div class="cat-item" onclick="jumpToCategory('${c.key}')">
+            <div class="cat-row-top">
+              <div class="cat-name-wrap">
+                <span class="cat-dot" style="background:${c.color};"></span>
+                <span>${c.label}</span>
+              </div>
+              <span class="cat-amount">${formatRp(val)}</span>
+            </div>
+            <div class="cat-bar-bg">
+              <div class="cat-bar-fill" style="width:${pct.toFixed(1)}%;background:${c.color};"></div>
+            </div>
+            <div class="cat-meta">
+              <span>${count} item tercatat</span>
+              <span>${pct.toFixed(1)}% dari pengeluaran</span>
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      // Render Recent Expenses on Overview
+      const recent = appData.expenses.slice(0, 5);
+      document.getElementById("recentExpensesList").innerHTML = recent.length
+        ? recent.map((item, idx) => buildExpenseCardHTML(item, idx)).join("")
+        : `<div class="empty-state">Belum ada pengeluaran tercatat.</div>`;
+
+      // Update Income Tab Header
+      document.getElementById("incomeSummaryHeader").textContent = formatRp(totalIn);
+      const memberPct = totalMembers > 0 ? (paidCount / totalMembers) * 100 : 0;
+      document.getElementById("memberProgressBar").style.width = `${memberPct}%`;
+      document.getElementById("memberStatsLine").textContent =
+        `${paidCount} anggota sudah menyetor • ${totalMembers - paidCount} anggota belum menyetor`;
+
+      renderMembers();
+      renderExpenses();
+    }
+
+    function jumpToCategory(catKey) {
+      switchTab("expenses");
+      const chips = document.querySelectorAll("#expenseCategoryChips .filter-chip");
+      chips.forEach(c => {
+        if (c.textContent.toUpperCase() === catKey) {
+          setExpenseCat(catKey, c);
+        }
+      });
+    }
+
+    function renderMembers() {
+      const q = (document.getElementById("memberSearchInput").value || "").toLowerCase();
+      const filtered = appData.members.filter(m => {
+        const matchName = m.nama.toLowerCase().includes(q);
+        if (memberFilter === "paid") return matchName && m.total > 0;
+        if (memberFilter === "unpaid") return matchName && m.total <= 0;
+        return matchName;
+      });
+
+      const container = document.getElementById("membersList");
+      if (!filtered.length) {
+        container.innerHTML = `<div class="empty-state">Tidak ada anggota yang sesuai filter.</div>`;
+        return;
+      }
+
+      container.innerHTML = filtered.map(m => {
+        const isPaid = m.total > 0;
+        return `
+          <div class="item-card" onclick='inspectMember(${JSON.stringify(m).replace(/'/g, "&#39;")})'>
+            <div class="item-left">
+              <div class="item-num">${m.no}</div>
+              <div class="item-info">
+                <div class="item-name">${m.nama}</div>
+                <div class="item-sub">
+                  <span class="badge ${isPaid ? "badge-paid" : "badge-unpaid"}">
+                    ${isPaid ? "Sudah Setor" : "Belum Setor"}
+                  </span>
+                  <span>Sel ${m.cell || "-"}</span>
+                </div>
+              </div>
+            </div>
+            <div class="item-right">
+              <div class="item-amount ${isPaid ? "val-in" : ""}">${formatRp(m.total)}</div>
+              <div class="item-unit">Total Iuran</div>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function inspectMember(m) {
+      const totalIn = appData.members.reduce((s, x) => s + (Number(x.total) || 0), 0);
+      const sharePct = totalIn > 0 ? ((m.total / totalIn) * 100).toFixed(1) : "0.0";
+      openDetailModal(m.nama, [
+        { k: "Nomor Urut", v: `#${m.no}` },
+        { k: "Status Iuran", v: m.total > 0 ? "✅ Sudah Bayar" : "⏳ Belum Bayar" },
+        { k: "Total Setoran", v: formatRp(m.total) },
+        { k: "Kontribusi Kas", v: `${sharePct}% dari total pemasukan` },
+        { k: "Koordinat Excel", v: `${appData.sheetName} (${m.cell || "Tabel Pemasukan"})` }
+      ]);
+    }
+
+    function getCatBadgeClass(cat) {
+      if (cat === "KONSUMSI") return "badge-cat-konsumsi";
+      if (cat === "POSKO") return "badge-cat-posko";
+      if (cat === "PDD") return "badge-cat-pdd";
+      if (cat === "PROKER") return "badge-cat-proker";
+      return "badge-cat-lain";
+    }
+
+    function buildExpenseCardHTML(item) {
+      const unitInfo = item.qty && item.hargaSatuan
+        ? `${item.qty} × ${formatRp(item.hargaSatuan)}`
+        : (item.qty ? `Qty: ${item.qty}` : "Rincian RAB");
+      return `
+        <div class="item-card" onclick='inspectExpense(${JSON.stringify(item).replace(/'/g, "&#39;")})'>
+          <div class="item-left">
+            <div class="item-num">${item.no || "•"}</div>
+            <div class="item-info">
+              <div class="item-name">${item.nama}</div>
+              <div class="item-sub">
+                <span class="badge ${getCatBadgeClass(item.category)}">${item.category}</span>
+                <span>${item.tanggal && item.tanggal !== "-" ? item.tanggal : "Tanpa tgl"}</span>
+              </div>
+            </div>
+          </div>
+          <div class="item-right">
+            <div class="item-amount">${formatRp(item.nominal)}</div>
+            <div class="item-unit">${unitInfo}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderExpenses() {
+      const q = (document.getElementById("expenseSearchInput").value || "").toLowerCase();
+      const filtered = appData.expenses.filter(item => {
+        const matchCat = expenseCatFilter === "ALL" || item.category === expenseCatFilter;
+        const matchText =
+          (item.nama || "").toLowerCase().includes(q) ||
+          (item.category || "").toLowerCase().includes(q) ||
+          (item.tanggal || "").toLowerCase().includes(q);
+        return matchCat && matchText;
+      });
+
+      const sumFiltered = filtered.reduce((s, x) => s + (Number(x.nominal) || 0), 0);
+      document.getElementById("expenseFilterCount").textContent = `Menampilkan ${filtered.length} item`;
+      document.getElementById("expenseFilterTotal").textContent = formatRp(sumFiltered);
+
+      const container = document.getElementById("expensesList");
+      container.innerHTML = filtered.length
+        ? filtered.map(item => buildExpenseCardHTML(item)).join("")
+        : `<div class="empty-state">Tidak ada item pengeluaran pada filter ini.</div>`;
+    }
+
+    function inspectExpense(item) {
+      openDetailModal(item.nama, [
+        { k: "Kategori Pos RAB", v: item.category },
+        { k: "Tanggal", v: item.tanggal || "-" },
+        { k: "Jumlah Barang", v: item.qty ? `${item.qty} unit` : "-" },
+        { k: "Harga Satuan", v: item.hargaSatuan ? formatRp(item.hargaSatuan) : "Belum diisi" },
+        { k: "Nominal Total", v: formatRp(item.nominal) },
+        { k: "Referensi Excel", v: item.cell || appData.sheetName }
+      ]);
+    }
+
+    // Dynamic Section-Aware Excel Parser for RAB KKN.xlsx
+    function parseRabWorkbook(arrayBuffer) {
+      const wb = XLSX.read(arrayBuffer, { type: "array" });
+      const targetSheetName = wb.SheetNames.find(n => n.toUpperCase().includes("LAPORAN")) || wb.SheetNames[0];
+      const ws = wb.Sheets[targetSheetName];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" });
+
+      const parsedMembers = [];
+      const parsedExpenses = [];
+      const catTotals = {
+        "KONSUMSI": 0,
+        "POSKO": 0,
+        "PDD": 0,
+        "LAIN-LAIN": 0,
+        "PROKER": 0
+      };
+
+      // 1. Parse PEMASUKAN ANGGOTA (Columns A..E)
+      let inMembers = false;
+      for (let r = 0; r < rows.length; r++) {
+        const row = rows[r];
+        const colA = String(row[0] || "").trim().toUpperCase();
+        const colB = String(row[1] || "").trim();
+        if (colA === "NO" && colB.toUpperCase() === "NAMA") {
+          inMembers = true;
+          continue;
+        }
+        if (inMembers) {
+          if (colA.includes("TOTAL") || colB.toUpperCase().includes("TOTAL")) {
+            inMembers = false;
+            continue;
+          }
+          if (colB) {
+            const valE = parseNum(row[4]);
+            const valC = parseNum(row[2]);
+            const valD = parseNum(row[3]);
+            const totalMember = valE || (valC + valD);
+            parsedMembers.push({
+              no: row[0] || parsedMembers.length + 1,
+              nama: colB,
+              total: totalMember,
+              cell: `E${r + 1}`
+            });
+          }
+        }
+      }
+
+      // 2. Parse left-side expense blocks (Cols G..M -> POSKO, LAIN-LAIN, PROKER)
+      let leftSection = null;
+      for (let r = 0; r < rows.length; r++) {
+        const row = rows[r];
+        const colG = String(row[6] || "").trim().toUpperCase();
+        if (["POSKO", "LAIN-LAIN", "PROKER"].includes(colG)) {
+          leftSection = colG;
+          continue;
+        }
+        if (!leftSection) continue;
+        if (colG === "NO" || colG === "JENIS PROKER") continue;
+        if (colG.includes("TOTAL")) {
+          const sectionSum = parseNum(row[12]) || parseNum(row[11]);
+          if (sectionSum > 0) catTotals[leftSection] = sectionSum;
+          leftSection = null;
+          continue;
+        }
+
+        if (leftSection === "PROKER") {
+          const jenis = String(row[6] || "").trim();
+          const ket = String(row[7] || "").trim();
+          const qty = parseNum(row[8]);
+          const harga = parseNum(row[9]) || parseNum(row[10]);
+          const total = parseNum(row[12]) || parseNum(row[11]) || (qty * harga);
+          if (jenis || ket || total > 0) {
+            parsedExpenses.push({
+              no: parsedExpenses.length + 1,
+              category: "PROKER",
+              tanggal: "-",
+              nama: jenis ? (ket ? `${jenis} - ${ket}` : jenis) : ket,
+              qty: qty || 1,
+              hargaSatuan: harga,
+              nominal: total,
+              cell: `G${r + 1}:M${r + 1}`
+            });
+          }
+        } else {
+          const tgl = String(row[7] || "").trim() || "-";
+          const nama = String(row[8] || "").trim();
+          const qty = parseNum(row[9]);
+          const harga = parseNum(row[10]) || parseNum(row[11]);
+          const nominal = parseNum(row[12]) || (qty * harga);
+          if (nama || nominal > 0) {
+            parsedExpenses.push({
+              no: row[6] || parsedExpenses.length + 1,
+              category: leftSection,
+              tanggal: tgl,
+              nama: nama || `Item ${leftSection}`,
+              qty: qty,
+              hargaSatuan: harga,
+              nominal: nominal,
+              cell: `I${r + 1}:M${r + 1}`
+            });
+          }
+        }
+      }
+
+      // 3. Parse right-side expense blocks (Cols O..T -> PDD & KONSUMSI)
+      let rightSection = null;
+      for (let r = 0; r < rows.length; r++) {
+        const row = rows[r];
+        const colO = String(row[14] || "").trim().toUpperCase();
+        if (["PDD", "KONSUMSI"].includes(colO)) {
+          rightSection = colO;
+          continue;
+        }
+        if (!rightSection) continue;
+        if (colO === "NO") continue;
+        if (colO.includes("TOTAL")) {
+          const sectionSum = parseNum(row[19]);
+          if (sectionSum > 0) catTotals[rightSection] = sectionSum;
+          rightSection = null;
+          continue;
+        }
+
+        const tgl = String(row[15] || "").trim() || "-";
+        const nama = String(row[16] || "").trim();
+        let qty = 0, harga = 0;
+        if (rightSection === "KONSUMSI") {
+          harga = parseNum(row[17]);
+          qty = parseNum(row[18]);
+        } else {
+          qty = parseNum(row[17]);
+          harga = parseNum(row[18]);
+        }
+        const nominal = parseNum(row[19]) || (qty * harga);
+        if (nama || nominal > 0) {
+          parsedExpenses.push({
+            no: row[14] || parsedExpenses.length + 1,
+            category: rightSection,
+            tanggal: tgl,
+            nama: nama || `Item ${rightSection}`,
+            qty: qty,
+            hargaSatuan: harga,
+            nominal: nominal,
+            cell: `Q${r + 1}:T${r + 1}`
+          });
+        }
+      }
+
+      // 4. Summary Table (Cols V..W)
+      for (let r = 0; r < rows.length; r++) {
+        const colV = String(rows[r][21] || "").trim().toUpperCase();
+        if (catTotals.hasOwnProperty(colV)) {
+          const summaryVal = parseNum(rows[r][22]);
+          const itemSum = parsedExpenses
+            .filter(e => e.category === colV)
+            .reduce((s, x) => s + x.nominal, 0);
+          catTotals[colV] = Math.max(summaryVal, itemSum);
+        }
+      }
+
+      Object.keys(catTotals).forEach(k => {
+        const itemSum = parsedExpenses.filter(e => e.category === k).reduce((s, x) => s + x.nominal, 0);
+        if (itemSum > catTotals[k]) catTotals[k] = itemSum;
+      });
+
+      const nowStr = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      appData = {
+        sheetName: targetSheetName,
+        lastSync: nowStr,
+        members: parsedMembers.length ? parsedMembers : appData.members,
+        expenses: parsedExpenses,
+        categoryTotals: catTotals
+      };
+
+      localStorage.setItem("rab_kkn_cache", JSON.stringify(appData));
+      renderAll();
+    }
+
+    function encodeOneDriveShareUrl(shareUrl) {
+      const b64 = btoa(unescape(encodeURIComponent(shareUrl.trim())));
+      const base64Url = b64.replace(/=+$/, "").replace(/\//g, "_").replace(/\+/g, "-");
+      return `https://api.onedrive.com/v1.0/shares/u!${base64Url}/root/content`;
+    }
+
+    async function syncNow(manual = false) {
+      const btn = document.getElementById("btnRefresh");
+      const dot = document.getElementById("syncDot");
+      const statusText = document.getElementById("syncStatusText");
+      const rawUrl = (document.getElementById("onedriveUrlInput").value || DEFAULT_ONEDRIVE_URL).trim();
+      const customProxy = (document.getElementById("proxyUrlInput").value || "").trim();
+
+      btn.classList.add("spinning");
+      statusText.textContent = "Menyinkronkan dengan Excel Online...";
+
+      try {
+        const directApiUrl = encodeOneDriveShareUrl(rawUrl);
+        const candidates = [];
+
+        if (customProxy) {
+          candidates.push(customProxy + encodeURIComponent(rawUrl));
+        }
+        if (window.location.protocol.startsWith("http") && window.location.hostname) {
+          candidates.push(`/api/excel?url=${encodeURIComponent(rawUrl)}`);
+        }
+        candidates.push(directApiUrl);
+
+        let buffer = null;
+        for (const endpoint of candidates) {
+          try {
+            const sep = endpoint.includes("?") ? "&" : "?";
+            const res = await fetch(`${endpoint}${sep}_ts=${Date.now()}`, { cache: "no-store" });
+            if (res.ok) {
+              const ab = await res.arrayBuffer();
+              if (ab && ab.byteLength > 2000) {
+                buffer = ab;
+                break;
+              }
+            }
+          } catch (_) {}
+        }
+
+        if (!buffer) {
+          throw new Error("CORS / Akses OneDrive membutuhkan izin 'Anyone with the link' atau server.js relay");
+        }
+
+        parseRabWorkbook(buffer);
+        dot.className = "pulse-dot";
+        statusText.textContent = `Live Sync • Update ${appData.lastSync}`;
+        if (manual) showToast("✅ Berhasil sinkron dengan Excel Online!");
+      } catch (err) {
+        dot.className = "pulse-dot offline";
+        statusText.textContent = `Mode Cache (${appData.lastSync})`;
+        if (manual) {
+          showToast("⚠️ Pakai data cache. Cek tab Sinkronisasi untuk koneksi live.");
+        }
+      } finally {
+        btn.classList.remove("spinning");
+      }
+    }
+
+    function saveAndSync() {
+      const url = document.getElementById("onedriveUrlInput").value.trim();
+      const proxy = document.getElementById("proxyUrlInput").value.trim();
+      localStorage.setItem("rab_onedrive_url", url);
+      localStorage.setItem("rab_proxy_url", proxy);
+      updatePollingInterval();
+      syncNow(true);
+    }
+
+    function handleLocalFile(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        parseRabWorkbook(evt.target.result);
+        document.getElementById("syncDot").className = "pulse-dot";
+        document.getElementById("syncStatusText").textContent = `File Lokal • ${appData.lastSync}`;
+        showToast("✅ File Excel lokal berhasil dimuat!");
+        switchTab("overview");
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function updatePollingInterval() {
+      if (pollTimer) clearInterval(pollTimer);
+      const ms = Number(document.getElementById("pollIntervalSelect").value);
+      localStorage.setItem("rab_poll_ms", String(ms));
+      if (ms > 0) {
+        pollTimer = setInterval(() => syncNow(false), ms);
+      }
+    }
+
+    // Boot
+    (function init() {
+      if (localStorage.getItem("rab_theme") === "light") {
+        document.documentElement.classList.add("light");
+      }
+      document.getElementById("onedriveUrlInput").value =
+        localStorage.getItem("rab_onedrive_url") || DEFAULT_ONEDRIVE_URL;
+      document.getElementById("proxyUrlInput").value =
+        localStorage.getItem("rab_proxy_url") || "";
+      const savedPoll = localStorage.getItem("rab_poll_ms");
+      if (savedPoll !== null) {
+        document.getElementById("pollIntervalSelect").value = savedPoll;
+      }
+
+      renderAll();
+      updatePollingInterval();
+      syncNow(false);
+    })();
+  </script>
+</body>
+</html>
