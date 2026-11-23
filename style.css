@@ -1069,3 +1069,56 @@ body {
     grid-template-columns: repeat(3, 1fr);
   }
 }
+/* View Logo di Modal Admin & Footer */
+.modal-logo-badge {
+  width: 54px;
+  height: 54px;
+  border-radius: 14px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  padding: 6px;
+  margin: 0 auto 12px auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-sm);
+}
+
+.modal-logo-badge img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.app-footer {
+  margin-top: 28px;
+  padding: 16px 18px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: left;
+}
+
+.footer-logo {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.footer-info {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.footer-info strong {
+  color: var(--text-main);
+  font-size: 0.84rem;
+}
