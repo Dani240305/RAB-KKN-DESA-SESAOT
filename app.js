@@ -1,7 +1,14 @@
-// Konfigurasi Bawaan Sistem
+// ============================================================================
+// 1. KONFIGURASI & DATA UTAMA (DAPAT DIEDIT LANGSUNG DI DALAM SCRIPT INI)
+// ============================================================================
+// Ubah nilai SCRIPT_DATA_VERSION (misal: "1.1", "1.2") setiap kali kamu
+// mengubah isi SCRIPT_RAB_DATA di bawah agar cache browser otomatis terbarui.
+const SCRIPT_DATA_VERSION = "1.0";
+
 const ADMIN_PASSWORD_HASH = "W1k1d14Ever@";
-const STORAGE_KEY_CONFIG = "rab_kkn_config_v1";
-const STORAGE_KEY_DATA = "rab_kkn_data_v1";
+const STORAGE_KEY_CONFIG = "rab_kkn_config_v3";
+const STORAGE_KEY_DATA = "rab_kkn_data_cache_v3";
+const STORAGE_KEY_SCRIPT_VER = "rab_kkn_script_version_v3";
 
 const DEFAULT_CONFIG = {
   excelUrl:
@@ -12,17 +19,14 @@ const DEFAULT_CONFIG = {
   kknSubtitle: "Laporan Pemasukan & Pengeluaran Realtime",
   targetIuran: 1500000,
   logoPath: "main/logo.png",
-  ketuaName: "Ketua Kelompok KKN",
-  bendaharaName: "Bendahara KKN"
+  ketuaName: "AHMAD DANI SARKAWI",
+  bendaharaName: "ULUL AZMI MAWARTI"
 };
 
-// Snapshot Data Awal sesuai Lembar Kerja RAB KKN.xlsx
-const INITIAL_RAB_DATA = {
-  lastUpdated: new Date().toLocaleString("id-ID", {
-    dateStyle: "medium",
-    timeStyle: "short"
-  }),
-  sourceMode: "cached",
+// Data RAB yang dapat kamu ubah langsung di dalam script ini kapan saja
+const SCRIPT_RAB_DATA = {
+  lastUpdated: "23 Nov 2026, 19.00",
+  sourceMode: "script-cache",
   members: [
     { no: 1, name: "AHMAD DANI SARKAWI", note: "", paid: 500000 },
     { no: 2, name: "IDA AYU PUTU MAHESWARI", note: "", paid: 0 },
@@ -43,6 +47,9 @@ const INITIAL_RAB_DATA = {
   ]
 };
 
+// ============================================================================
+// 2. LOGIKA CACHE, SINKRONISASI EXCEL ONLINE & RENDERING UI
+// ============================================================================
 const CATEGORY_META = {
   POSKO: { label: "Posko", color: "#0284c7" },
   PDD: { label: "PDD", color: "#7c3aed" },
@@ -57,7 +64,6 @@ let selectedExpenseCat = "ALL";
 let syncTimerId = null;
 let isAdminUnlocked = sessionStorage.getItem("rab_admin_unlocked") === "true";
 
-// Utilitas Format Rupiah
 function formatRupiah(num) {
   const value = Number(num) || 0;
   return new Intl.NumberFormat("id-ID", {
@@ -89,10 +95,9 @@ function showToast(msg) {
   toast.textContent = msg;
   toast.classList.add("show");
   clearTimeout(toast._timer);
-  toast._timer = setTimeout(() => toast.classList.remove("show"), 3000);
+  toast._timer = setTimeout(() => toast.classList.remove("show"), 3200);
 }
 
-// Penyimpanan Lokal
 function loadConfig() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_CONFIG);
@@ -106,17 +111,28 @@ function saveConfig() {
   localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(appConfig));
 }
 
+// Memuat data dari cache lokal, atau otomatis memperbarui cache jika versi script berubah
 function loadSavedData() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_DATA);
-    return raw ? JSON.parse(raw) : structuredClone(INITIAL_RAB_DATA);
+    const cachedVersion = localStorage.getItem(STORAGE_KEY_SCRIPT_VER);
+    const rawCache = localStorage.getItem(STORAGE_KEY_DATA);
+
+    if (cachedVersion !== SCRIPT_DATA_VERSION || !rawCache) {
+      const freshFromScript = structuredClone(SCRIPT_RAB_DATA);
+      localStorage.setItem(STORAGE_KEY_DATA, JSON.stringify(freshFromScript));
+      localStorage.setItem(STORAGE_KEY_SCRIPT_VER, SCRIPT_DATA_VERSION);
+      return freshFromScript;
+    }
+
+    return JSON.parse(rawCache);
   } catch {
-    return structuredClone(INITIAL_RAB_DATA);
+    return structuredClone(SCRIPT_RAB_DATA);
   }
 }
 
-function saveData() {
+function saveDataToCache() {
   localStorage.setItem(STORAGE_KEY_DATA, JSON.stringify(rabData));
+  localStorage.setItem(STORAGE_KEY_SCRIPT_VER, SCRIPT_DATA_VERSION);
 }
 
 // Konversi Tautan OneDrive / Excel Online menjadi URL Unduhan Langsung
@@ -125,7 +141,6 @@ function buildCandidateUrls(rawUrl, mode) {
   if (!url) return [];
   const candidates = [];
 
-  // Jika Google Sheets
   if (url.includes("docs.google.com/spreadsheets")) {
     const match = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
     if (match) {
@@ -133,7 +148,6 @@ function buildCandidateUrls(rawUrl, mode) {
     }
   }
 
-  // Jika OneDrive Personal / SharePoint Migrated
   if (url.includes("onedrive.live.com")) {
     try {
       const parsed = new URL(url);
@@ -160,7 +174,6 @@ function buildCandidateUrls(rawUrl, mode) {
 
   candidates.push(url);
 
-  // Bungkus dengan proxy jika dibutuhkan untuk melewati pembatasan CORS browser
   const finalUrls = [];
   for (const target of [...new Set(candidates)]) {
     if (mode === "direct") {
@@ -188,7 +201,6 @@ function parseRabWorkbook(workbook) {
   const members = [];
   const expenses = [];
 
-  // 1. Parse PEMASUKAN ANGGOTA (Kolom B-E: NO, NAMA, IURAN, TOTAL)
   let inMembers = false;
   for (let r = 0; r < rows.length; r++) {
     const row = rows[r];
@@ -216,7 +228,6 @@ function parseRabWorkbook(workbook) {
     }
   }
 
-  // 2. Fungsi bantu membaca blok tabel pengeluaran berdasarkan koordinat kolom
   function extractExpenseBlock(headerRowIdx, startCol, categoryName, isKonsumsi = false, isProker = false) {
     for (let r = headerRowIdx + 1; r < rows.length; r++) {
       const row = rows[r];
@@ -250,7 +261,6 @@ function parseRabWorkbook(workbook) {
           });
         }
       } else if (isKonsumsi) {
-        // Pada tabel KONSUMSI: NO(0), tanggal(1), nama barang(2), harga satuan(3), jumlah barang(4), nominal(5)
         const itemName = String(row[startCol + 2] || "").trim();
         const unitPrice = parseNumber(row[startCol + 3]);
         const qty = parseNumber(row[startCol + 4]);
@@ -267,7 +277,6 @@ function parseRabWorkbook(workbook) {
           });
         }
       } else {
-        // POSKO, PDD, LAIN-LAIN: NO(0), tanggal(1), nama/deskripsi(2), jumlah barang(3), harga satuan(4), nominal(5)
         const itemName = String(row[startCol + 2] || "").trim();
         const qty = parseNumber(row[startCol + 3]);
         const unitPrice = parseNumber(row[startCol + 4]);
@@ -287,7 +296,6 @@ function parseRabWorkbook(workbook) {
     }
   }
 
-  // Temukan posisi setiap sub-tabel secara dinamis
   for (let r = 0; r < rows.length; r++) {
     const row = rows[r];
     for (let c = 0; c < row.length; c++) {
@@ -315,13 +323,13 @@ function parseRabWorkbook(workbook) {
       dateStyle: "medium",
       timeStyle: "short"
     }),
-    sourceMode: "live",
+    sourceMode: "live-cached",
     members: members.length > 0 ? members : rabData.members,
     expenses
   };
 }
 
-// Sinkronisasi dari Excel Online
+// Sinkronisasi dari Excel Online & Simpan ke Cache
 async function syncFromExcelOnline(silent = false) {
   const badge = document.getElementById("syncBadge");
   const badgeText = document.getElementById("syncStatusText");
@@ -345,7 +353,6 @@ async function syncFromExcelOnline(silent = false) {
       const arrayBuffer = await response.arrayBuffer();
       const uint8 = new Uint8Array(arrayBuffer);
 
-      // Pastikan respons adalah file biner ZIP/XLSX (signature PK)
       if (uint8.length < 4 || uint8[0] !== 0x50 || uint8[1] !== 0x4b) {
         continue;
       }
@@ -353,7 +360,7 @@ async function syncFromExcelOnline(silent = false) {
       const workbook = XLSX.read(arrayBuffer, { type: "array" });
       const parsed = parseRabWorkbook(workbook);
       rabData = parsed;
-      saveData();
+      saveDataToCache();
       syncedSuccess = true;
       break;
     } catch {
@@ -365,21 +372,19 @@ async function syncFromExcelOnline(silent = false) {
 
   if (syncedSuccess) {
     badge.className = "sync-badge status-live";
-    badgeText.textContent = "Live Sync Aktif";
-    if (!silent) showToast("Data RAB KKN berhasil diperbarui dari Excel Online.");
+    badgeText.textContent = "Live & Tersimpan";
+    if (!silent) showToast("Data berhasil disinkronkan dari Excel Online & disimpan ke cache.");
   } else {
-    rabData.sourceMode = "cached";
     badge.className = "sync-badge status-cached";
-    badgeText.textContent = "Mode Cache Lokal";
+    badgeText.textContent = `Cache (v${SCRIPT_DATA_VERSION})`;
     if (!silent) {
-      showToast("Menggunakan data tersimpan. Cek akses tautan Excel di Admin jika diperlukan.");
+      showToast("Menampilkan data cache lokal. Kamu bisa edit langsung di script atau unggah .xlsx.");
     }
   }
 
   renderAll();
 }
 
-// Hitung Statistik Utama
 function computeSummary() {
   const totalIncome = rabData.members.reduce((sum, m) => sum + (Number(m.paid) || 0), 0);
   const totalExpense = rabData.expenses.reduce((sum, e) => sum + (Number(e.total) || 0), 0);
@@ -415,9 +420,7 @@ function computeSummary() {
   };
 }
 
-// Render Seluruh Komponen UI
 function renderAll() {
-  // Identitas Header
   document.getElementById("headerTitle").textContent = appConfig.kknTitle;
   document.getElementById("headerSubtitle").textContent = appConfig.kknSubtitle;
   document.getElementById("lastUpdatedTime").textContent = rabData.lastUpdated;
@@ -432,7 +435,6 @@ function renderAll() {
 
   const stats = computeSummary();
 
-  // KPI Cards
   document.getElementById("kpiTotalPemasukan").textContent = formatRupiah(stats.totalIncome);
   document.getElementById("kpiSubPemasukan").textContent = `${stats.paidMembersCount} dari ${stats.totalMembersCount} anggota sudah setor`;
 
@@ -731,11 +733,10 @@ function generateWhatsAppReportText() {
   return lines.join("\n");
 }
 
-async function copyWhatsAppReport() {
-  const text = generateWhatsAppReportText();
+async function copyTextToClipboard(text, successMessage) {
   try {
     await navigator.clipboard.writeText(text);
-    showToast("Laporan kas WhatsApp berhasil disalin ke papan klip!");
+    showToast(successMessage);
   } catch {
     const temp = document.createElement("textarea");
     temp.value = text;
@@ -743,8 +744,15 @@ async function copyWhatsAppReport() {
     temp.select();
     document.execCommand("copy");
     document.body.removeChild(temp);
-    showToast("Laporan kas WhatsApp berhasil disalin!");
+    showToast(successMessage);
   }
+}
+
+function copyWhatsAppReport() {
+  copyTextToClipboard(
+    generateWhatsAppReportText(),
+    "Laporan kas WhatsApp berhasil disalin ke papan klip!"
+  );
 }
 
 function sendWhatsAppReport() {
@@ -786,7 +794,6 @@ async function exportRabToPdf() {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const stats = computeSummary();
 
-  // Muat Logo jika tersedia
   const logoDataUrl = await loadLogoAsDataUrl(appConfig.logoPath);
   let headerTextX = 14;
   if (logoDataUrl) {
@@ -794,7 +801,6 @@ async function exportRabToPdf() {
     headerTextX = 34;
   }
 
-  // Header Dokumen
   doc.setFont("helvetica", "bold");
   doc.setFontSize(15);
   doc.setTextColor(15, 118, 110);
@@ -809,7 +815,6 @@ async function exportRabToPdf() {
   doc.setDrawColor(203, 213, 225);
   doc.line(14, 32, 196, 32);
 
-  // Kotak Ringkasan Saldo
   const boxY = 36;
   const boxes = [
     { label: "TOTAL PEMASUKAN", val: formatRupiah(stats.totalIncome), color: [5, 150, 105] },
@@ -831,7 +836,6 @@ async function exportRabToPdf() {
     doc.text(b.val, x + 4, boxY + 13.5);
   });
 
-  // Tabel 1: Rekapitulasi Jenis RAB
   doc.setFontSize(10.5);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(15, 23, 42);
@@ -853,7 +857,6 @@ async function exportRabToPdf() {
     columnStyles: { 1: { halign: "right" }, 2: { halign: "right" } }
   });
 
-  // Tabel 2: Rincian Item Pengeluaran
   const nextY1 = doc.lastAutoTable.finalY + 8;
   doc.setFontSize(10.5);
   doc.setFont("helvetica", "bold");
@@ -881,7 +884,6 @@ async function exportRabToPdf() {
     }
   });
 
-  // Tabel 3: Rekap Pemasukan Anggota
   const nextY2 = doc.lastAutoTable.finalY + 8;
   doc.setFontSize(10.5);
   doc.setFont("helvetica", "bold");
@@ -904,7 +906,6 @@ async function exportRabToPdf() {
     columnStyles: { 3: { halign: "right" } }
   });
 
-  // Kolom Tanda Tangan
   let signY = doc.lastAutoTable.finalY + 14;
   if (signY > 265) {
     doc.addPage();
@@ -1021,20 +1022,15 @@ document.addEventListener("DOMContentLoaded", () => {
   setupAutoSyncTimer();
   syncFromExcelOnline(true);
 
-  // Navigasi Tab Desktop & Mobile
   document.querySelectorAll(".nav-tab, .mobile-nav-item").forEach((btn) => {
     btn.addEventListener("click", () => switchView(btn.dataset.view));
   });
 
-  // Tombol Sync Manual
   document.getElementById("btnManualSync").addEventListener("click", () => syncFromExcelOnline(false));
-
-  // Tombol WhatsApp & PDF
   document.getElementById("btnCopyWA").addEventListener("click", copyWhatsAppReport);
   document.getElementById("btnSendWA").addEventListener("click", sendWhatsAppReport);
   document.getElementById("btnExportPDF").addEventListener("click", exportRabToPdf);
 
-  // Filter Pemasukan & Pengeluaran
   document.getElementById("searchMemberInput").addEventListener("input", renderMembersDetail);
   document.getElementById("filterMemberStatus").addEventListener("change", renderMembersDetail);
   document.getElementById("searchExpenseInput").addEventListener("input", renderExpensesDetail);
@@ -1090,6 +1086,23 @@ document.addEventListener("DOMContentLoaded", () => {
     syncFromExcelOnline(false);
   });
 
+  // Salin blok kode SCRIPT_RAB_DATA siap tempel ke app.js
+  document.getElementById("btnCopyScriptSnippet").addEventListener("click", () => {
+    const exportedBlock = `const SCRIPT_RAB_DATA = ${JSON.stringify(rabData, null, 2)};`;
+    copyTextToClipboard(
+      exportedBlock,
+      "Blok kode SCRIPT_RAB_DATA disalin! Tempelkan ke bagian atas app.js."
+    );
+  });
+
+  // Muat ulang cache langsung dari isi SCRIPT_RAB_DATA di app.js
+  document.getElementById("btnReloadFromScript").addEventListener("click", () => {
+    rabData = structuredClone(SCRIPT_RAB_DATA);
+    saveDataToCache();
+    renderAll();
+    showToast("Cache diperbarui sesuai isi data di dalam app.js.");
+  });
+
   document.getElementById("btnSaveIdentity").addEventListener("click", () => {
     appConfig.kknTitle = document.getElementById("adminKknTitle").value.trim() || DEFAULT_CONFIG.kknTitle;
     appConfig.kknSubtitle = document.getElementById("adminKknSubtitle").value.trim() || DEFAULT_CONFIG.kknSubtitle;
@@ -1104,15 +1117,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("btnResetDefault").addEventListener("click", () => {
     appConfig = { ...DEFAULT_CONFIG };
-    rabData = structuredClone(INITIAL_RAB_DATA);
+    rabData = structuredClone(SCRIPT_RAB_DATA);
     saveConfig();
-    saveData();
+    saveDataToCache();
     setupAutoSyncTimer();
     renderAll();
-    showToast("Pengaturan dan data dikembalikan ke bawaan.");
+    showToast("Pengaturan dan cache dikembalikan ke bawaan script.");
   });
 
-  // Unggah File .xlsx Manual di Admin
   document.getElementById("adminUploadXlsx").addEventListener("change", async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -1120,17 +1132,16 @@ document.addEventListener("DOMContentLoaded", () => {
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: "array" });
       rabData = parseRabWorkbook(workbook);
-      rabData.sourceMode = "manual-file";
-      saveData();
+      rabData.sourceMode = "manual-file-cached";
+      saveDataToCache();
       renderAll();
-      showToast(`File "${file.name}" berhasil dimuat.`);
+      showToast(`File "${file.name}" dimuat & disimpan ke cache.`);
     } catch (err) {
       showToast(`Gagal membaca file: ${err.message}`);
     }
     e.target.value = "";
   });
 
-  // Editor Cepat di Admin
   document.getElementById("editTypeSelect").addEventListener("change", refreshQuickEditOptions);
   document.getElementById("btnApplyQuickEdit").addEventListener("click", () => {
     const type = document.getElementById("editTypeSelect").value;
@@ -1165,8 +1176,8 @@ document.addEventListener("DOMContentLoaded", () => {
       dateStyle: "medium",
       timeStyle: "short"
     });
-    saveData();
+    saveDataToCache();
     renderAll();
-    showToast("Perubahan data berhasil diterapkan.");
+    showToast("Perubahan diterapkan dan disimpan ke cache.");
   });
 });
