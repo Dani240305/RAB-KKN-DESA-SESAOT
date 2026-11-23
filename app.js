@@ -1,19 +1,17 @@
 // ============================================================================
-// 1. KONFIGURASI & DATA UTAMA (DAPAT DIEDIT LANGSUNG DI DALAM SCRIPT INI)
+// 1. KONFIGURASI SISTEM (DATA 100% DIAMBIL LANGSUNG DARI EXCEL ONLINE)
 // ============================================================================
-// Ubah nilai SCRIPT_DATA_VERSION (misal: "1.1", "1.2") setiap kali kamu
-// mengubah isi SCRIPT_RAB_DATA di bawah agar cache browser otomatis terbarui.
-const SCRIPT_DATA_VERSION = "1.0";
+const SCRIPT_DATA_VERSION = "2.0";
 
 const ADMIN_PASSWORD_HASH = "W1k1d14Ever@";
-const STORAGE_KEY_CONFIG = "rab_kkn_config_v3";
-const STORAGE_KEY_DATA = "rab_kkn_data_cache_v3";
-const STORAGE_KEY_SCRIPT_VER = "rab_kkn_script_version_v3";
+const STORAGE_KEY_CONFIG = "rab_kkn_config_v4";
+const STORAGE_KEY_DATA = "rab_kkn_data_cache_v4";
+const STORAGE_KEY_SCRIPT_VER = "rab_kkn_script_version_v4";
 
 const DEFAULT_CONFIG = {
   excelUrl:
     "https://onedrive.live.com/:x:/g/personal/0A4873D3EB635F62/IQAxUwzNi4F6T6fH2heV9QpjAbR2TKqf3GP3fLmR2kK50kc?resid=0A4873D3EB635F62!scd0c5331818b4f7aa7c7da1795f50a63&ithint=file%2Cxlsx&e=GMcqhA&migratedtospo=true&redeem=aHR0cHM6Ly8xZHJ2Lm1zL3gvYy8wYTQ4NzNkM2ViNjM1ZjYyL0lRQXhVd3pOaTRGNlQ2ZkgyaGVWOVFwakFiUjJUS3FmM0dQM2ZMbVIya0s1MGtjP2U9R01jcWhB",
-  syncInterval: 30000,
+  syncInterval: 15000,
   corsMode: "auto",
   kknTitle: "RAB & Kas KKN",
   kknSubtitle: "Laporan Pemasukan & Pengeluaran Realtime",
@@ -23,32 +21,16 @@ const DEFAULT_CONFIG = {
   bendaharaName: "ULUL AZMI MAWARTI"
 };
 
-// Data RAB yang dapat kamu ubah langsung di dalam script ini kapan saja
+// Kosongkan data bawaan agar 100% mengandalkan tarikan langsung dari Excel Online
 const SCRIPT_RAB_DATA = {
-  lastUpdated: "23 Nov 2026, 19.00",
-  sourceMode: "script-cache",
-  members: [
-    { no: 1, name: "AHMAD DANI SARKAWI", note: "", paid: 500000 },
-    { no: 2, name: "IDA AYU PUTU MAHESWARI", note: "", paid: 0 },
-    { no: 3, name: "ULUL AZMI MAWARTI", note: "", paid: 0 },
-    { no: 4, name: "AHMAD DZULAL FAZA AZMAN", note: "", paid: 1500000 },
-    { no: 5, name: "SYAFTA EKA PUTRA", note: "", paid: 0 },
-    { no: 6, name: "FISA FAJRIYAH RAHMAN", note: "", paid: 900000 },
-    { no: 7, name: "HAULA PURRASADA", note: "", paid: 300000 },
-    { no: 8, name: "ALIYAH ROFIFAH ALKATIRI", note: "", paid: 900000 },
-    { no: 9, name: "MAYA MARTANIATI", note: "", paid: 300000 },
-    { no: 10, name: "I MD ANDIKA PUTRA WIJAYA", note: "", paid: 900000 }
-  ],
-  expenses: [
-    { category: "LAIN-LAIN", date: "-", name: "PDH", qty: 10, unitPrice: 0, total: 0 },
-    { category: "LAIN-LAIN", date: "-", name: "Kaos", qty: 10, unitPrice: 0, total: 0 },
-    { category: "LAIN-LAIN", date: "-", name: "Lanyard", qty: 10, unitPrice: 0, total: 0 },
-    { category: "LAIN-LAIN", date: "-", name: "Id Card", qty: 10, unitPrice: 223000, total: 2230000 }
-  ]
+  lastUpdated: "Menunggu sinkronisasi Excel Online...",
+  sourceMode: "empty",
+  members: [],
+  expenses: []
 };
 
 // ============================================================================
-// 2. LOGIKA CACHE, SINKRONISASI EXCEL ONLINE & RENDERING UI
+// 2. LOGIKA PENARIKAN DATA ONEDRIVE, CACHE OFFLINE & RENDERING UI
 // ============================================================================
 const CATEGORY_META = {
   POSKO: { label: "Posko", color: "#0284c7" },
@@ -111,19 +93,17 @@ function saveConfig() {
   localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(appConfig));
 }
 
-// Memuat data dari cache lokal, atau otomatis memperbarui cache jika versi script berubah
 function loadSavedData() {
   try {
     const cachedVersion = localStorage.getItem(STORAGE_KEY_SCRIPT_VER);
     const rawCache = localStorage.getItem(STORAGE_KEY_DATA);
 
     if (cachedVersion !== SCRIPT_DATA_VERSION || !rawCache) {
-      const freshFromScript = structuredClone(SCRIPT_RAB_DATA);
-      localStorage.setItem(STORAGE_KEY_DATA, JSON.stringify(freshFromScript));
+      const fresh = structuredClone(SCRIPT_RAB_DATA);
+      localStorage.setItem(STORAGE_KEY_DATA, JSON.stringify(fresh));
       localStorage.setItem(STORAGE_KEY_SCRIPT_VER, SCRIPT_DATA_VERSION);
-      return freshFromScript;
+      return fresh;
     }
-
     return JSON.parse(rawCache);
   } catch {
     return structuredClone(SCRIPT_RAB_DATA);
@@ -135,7 +115,16 @@ function saveDataToCache() {
   localStorage.setItem(STORAGE_KEY_SCRIPT_VER, SCRIPT_DATA_VERSION);
 }
 
-// Konversi Tautan OneDrive / Excel Online menjadi URL Unduhan Langsung
+// Encode URL menjadi token OneDrive Shares API (u!...) untuk unduh langsung file mentah .xlsx
+function encodeOneDriveShareUrl(shareUrl) {
+  const base64 = btoa(unescape(encodeURIComponent(shareUrl)))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+  return `https://api.onedrive.com/v1.0/shares/u!${base64}/root/content`;
+}
+
+// Konversi Tautan OneDrive / Excel Online menjadi URL Unduhan Biner .xlsx
 function buildCandidateUrls(rawUrl, mode) {
   const url = (rawUrl || "").trim();
   if (!url) return [];
@@ -148,24 +137,32 @@ function buildCandidateUrls(rawUrl, mode) {
     }
   }
 
-  if (url.includes("onedrive.live.com")) {
+  if (url.includes("onedrive.live.com") || url.includes("1drv.ms")) {
     try {
       const parsed = new URL(url);
       const resid = parsed.searchParams.get("resid");
       const authkey = parsed.searchParams.get("authkey");
       const redeem = parsed.searchParams.get("redeem");
 
+      // 1. Jalur resmi OneDrive Shares API dari parameter redeem (1drv.ms)
+      if (redeem) {
+        try {
+          const decodedRedeem = atob(redeem);
+          candidates.push(encodeOneDriveShareUrl(decodedRedeem));
+          candidates.push(`${decodedRedeem}${decodedRedeem.includes("?") ? "&" : "?"}download=1`);
+        } catch {}
+      }
+
+      // 2. Jalur resmi OneDrive Shares API dari URL utama
+      candidates.push(encodeOneDriveShareUrl(url));
+
+      // 3. Jalur download langsung berdasarkan resid
       if (resid) {
         let dlUrl = `https://onedrive.live.com/download?resid=${encodeURIComponent(resid)}`;
         if (authkey) dlUrl += `&authkey=${encodeURIComponent(authkey)}`;
         candidates.push(dlUrl);
       }
-      if (redeem) {
-        try {
-          const decodedRedeem = atob(redeem);
-          candidates.push(`${decodedRedeem}${decodedRedeem.includes("?") ? "&" : "?"}download=1`);
-        } catch {}
-      }
+
       const directParam = new URL(url);
       directParam.searchParams.set("download", "1");
       candidates.push(directParam.toString());
@@ -174,8 +171,14 @@ function buildCandidateUrls(rawUrl, mode) {
 
   candidates.push(url);
 
+  // Tambahkan timestamp anti-cache agar browser selalu menarik versi terbaru dari Excel Online
+  const bust = `_t=${Date.now()}`;
+  const withCacheBust = [...new Set(candidates)].map(
+    (u) => `${u}${u.includes("?") ? "&" : "?"}${bust}`
+  );
+
   const finalUrls = [];
-  for (const target of [...new Set(candidates)]) {
+  for (const target of withCacheBust) {
     if (mode === "direct") {
       finalUrls.push(target);
     } else if (mode === "corsproxy") {
@@ -201,6 +204,7 @@ function parseRabWorkbook(workbook) {
   const members = [];
   const expenses = [];
 
+  // Parse PEMASUKAN ANGGOTA
   let inMembers = false;
   for (let r = 0; r < rows.length; r++) {
     const row = rows[r];
@@ -228,6 +232,7 @@ function parseRabWorkbook(workbook) {
     }
   }
 
+  // Parse 5 Kategori Pengeluaran
   function extractExpenseBlock(headerRowIdx, startCol, categoryName, isKonsumsi = false, isProker = false) {
     for (let r = headerRowIdx + 1; r < rows.length; r++) {
       const row = rows[r];
@@ -321,22 +326,22 @@ function parseRabWorkbook(workbook) {
   return {
     lastUpdated: new Date().toLocaleString("id-ID", {
       dateStyle: "medium",
-      timeStyle: "short"
+      timeStyle: "medium"
     }),
-    sourceMode: "live-cached",
-    members: members.length > 0 ? members : rabData.members,
+    sourceMode: "live-excel",
+    members,
     expenses
   };
 }
 
-// Sinkronisasi dari Excel Online & Simpan ke Cache
+// Sinkronisasi Langsung dari Excel Online & Simpan Hasilnya ke Cache Offline
 async function syncFromExcelOnline(silent = false) {
   const badge = document.getElementById("syncBadge");
   const badgeText = document.getElementById("syncStatusText");
   const syncBtn = document.getElementById("btnManualSync");
 
   badge.className = "sync-badge status-syncing";
-  badgeText.textContent = "Menyinkronkan...";
+  badgeText.textContent = "Menarik Excel...";
   syncBtn.classList.add("spinning");
 
   const urls = buildCandidateUrls(appConfig.excelUrl, appConfig.corsMode);
@@ -345,14 +350,18 @@ async function syncFromExcelOnline(silent = false) {
   for (const targetUrl of urls) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 9000);
-      const response = await fetch(targetUrl, { signal: controller.signal });
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const response = await fetch(targetUrl, {
+        signal: controller.signal,
+        cache: "no-store"
+      });
       clearTimeout(timeoutId);
 
       if (!response.ok) continue;
       const arrayBuffer = await response.arrayBuffer();
       const uint8 = new Uint8Array(arrayBuffer);
 
+      // Pastikan respons adalah file .xlsx valid (header ZIP PK)
       if (uint8.length < 4 || uint8[0] !== 0x50 || uint8[1] !== 0x4b) {
         continue;
       }
@@ -372,13 +381,13 @@ async function syncFromExcelOnline(silent = false) {
 
   if (syncedSuccess) {
     badge.className = "sync-badge status-live";
-    badgeText.textContent = "Live & Tersimpan";
-    if (!silent) showToast("Data berhasil disinkronkan dari Excel Online & disimpan ke cache.");
+    badgeText.textContent = "Live Excel Aktif";
+    if (!silent) showToast("Data terbaru berhasil ditarik langsung dari Excel Online!");
   } else {
-    badge.className = "sync-badge status-cached";
-    badgeText.textContent = `Cache (v${SCRIPT_DATA_VERSION})`;
+    badge.className = "sync-badge status-offline";
+    badgeText.textContent = rabData.members.length > 0 ? "Cache Terakhir" : "Gagal Tarik Excel";
     if (!silent) {
-      showToast("Menampilkan data cache lokal. Kamu bisa edit langsung di script atau unggah .xlsx.");
+      showToast("Gagal menarik file langsung dari OneDrive. Pastikan izin berbagi publik aktif atau coba unggah .xlsx.");
     }
   }
 
@@ -481,6 +490,11 @@ function renderCategoryBars(stats) {
 
 function renderMembersPreview() {
   const container = document.getElementById("summaryMembersPreview");
+  if (rabData.members.length === 0) {
+    container.innerHTML = `<div class="empty-state">Menunggu data anggota dari Excel Online...</div>`;
+    return;
+  }
+
   container.innerHTML = rabData.members
     .map((m) => {
       const isPaid = m.paid > 0;
@@ -502,7 +516,7 @@ function renderMembersPreview() {
 function renderRecentItems(activeItems) {
   const container = document.getElementById("recentItemsContainer");
   if (activeItems.length === 0) {
-    container.innerHTML = `<div class="empty-state">Belum ada pengeluaran dengan nominal aktif.</div>`;
+    container.innerHTML = `<div class="empty-state">Belum ada pengeluaran dengan nominal aktif di Excel Online.</div>`;
     return;
   }
 
@@ -563,6 +577,11 @@ function renderMembersDetail() {
   const query = (document.getElementById("searchMemberInput").value || "").toLowerCase();
   const statusFilter = document.getElementById("filterMemberStatus").value;
   const target = Number(appConfig.targetIuran) || 1500000;
+
+  if (rabData.members.length === 0) {
+    container.innerHTML = `<div class="empty-state">Belum ada data anggota. Tekan tombol sinkronisasi di kanan atas.</div>`;
+    return;
+  }
 
   const filtered = rabData.members.filter((m) => {
     const matchName = m.name.toLowerCase().includes(query);
@@ -1015,12 +1034,11 @@ function setupAutoSyncTimer() {
   }
 }
 
-// Inisialisasi Event Listeners
 document.addEventListener("DOMContentLoaded", () => {
   updateAdminLockBadge();
   renderAll();
   setupAutoSyncTimer();
-  syncFromExcelOnline(true);
+  syncFromExcelOnline(false);
 
   document.querySelectorAll(".nav-tab, .mobile-nav-item").forEach((btn) => {
     btn.addEventListener("click", () => switchView(btn.dataset.view));
@@ -1044,7 +1062,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // Modal Autentikasi Admin
   document.getElementById("adminAuthForm").addEventListener("submit", (e) => {
     e.preventDefault();
     const entered = document.getElementById("adminPasswordInput").value;
@@ -1068,7 +1085,6 @@ document.addEventListener("DOMContentLoaded", () => {
     input.type = input.type === "password" ? "text" : "password";
   });
 
-  // Aksi Panel Admin
   document.getElementById("btnLockAdmin").addEventListener("click", () => {
     isAdminUnlocked = false;
     sessionStorage.removeItem("rab_admin_unlocked");
@@ -1086,7 +1102,6 @@ document.addEventListener("DOMContentLoaded", () => {
     syncFromExcelOnline(false);
   });
 
-  // Salin blok kode SCRIPT_RAB_DATA siap tempel ke app.js
   document.getElementById("btnCopyScriptSnippet").addEventListener("click", () => {
     const exportedBlock = `const SCRIPT_RAB_DATA = ${JSON.stringify(rabData, null, 2)};`;
     copyTextToClipboard(
@@ -1095,12 +1110,12 @@ document.addEventListener("DOMContentLoaded", () => {
     );
   });
 
-  // Muat ulang cache langsung dari isi SCRIPT_RAB_DATA di app.js
   document.getElementById("btnReloadFromScript").addEventListener("click", () => {
     rabData = structuredClone(SCRIPT_RAB_DATA);
     saveDataToCache();
     renderAll();
-    showToast("Cache diperbarui sesuai isi data di dalam app.js.");
+    showToast("Cache dikosongkan. Menarik ulang dari Excel Online...");
+    syncFromExcelOnline(false);
   });
 
   document.getElementById("btnSaveIdentity").addEventListener("click", () => {
@@ -1122,7 +1137,7 @@ document.addEventListener("DOMContentLoaded", () => {
     saveDataToCache();
     setupAutoSyncTimer();
     renderAll();
-    showToast("Pengaturan dan cache dikembalikan ke bawaan script.");
+    syncFromExcelOnline(false);
   });
 
   document.getElementById("adminUploadXlsx").addEventListener("change", async (e) => {
@@ -1174,7 +1189,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     rabData.lastUpdated = new Date().toLocaleString("id-ID", {
       dateStyle: "medium",
-      timeStyle: "short"
+      timeStyle: "medium"
     });
     saveDataToCache();
     renderAll();
